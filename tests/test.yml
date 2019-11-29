@@ -3,4 +3,4 @@
   gather_facts: False
   remote_user: root
   roles:
-    - proxysql_ray
+    - proxysql
