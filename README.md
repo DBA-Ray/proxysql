@@ -12,7 +12,7 @@ Role Variables
 --------------
 
 
-is_update: True
+is_update: True \n
 package_dir: /opt/
 proxysql_package: proxysql-2.0.8-1-centos7.x86_64.rpm
 source_file: /opt/{{ proxysql_package }}
