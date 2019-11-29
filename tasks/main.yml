@@ -1,0 +1,9 @@
+---
+# tasks file for proxysql_ray
+- include: password.yml
+
+- include: system_check.yml
+
+- include: prepare.yml
+
+- include: install.yml

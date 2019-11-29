@@ -1,0 +1,15 @@
+---
+# handlers file for proxysql_ray
+
+- name: Restart ProxySQL
+  systemd:
+    name: proxysql
+    state: restarted
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Wait for ProxySQL is running
+  pause: seconds=3
+

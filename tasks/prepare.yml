@@ -1,0 +1,56 @@
+# 复制proxysql安装包、mysql客户端和初始化sql脚本
+
+- name: 复制proxysql安装包和其他依赖软件包
+  copy: >
+    src={{ proxysql_package }} dest={{ package_dir }}
+    src=mysql dest={{ package_dir }}
+    src=mysql_config_editor dest={{ package_dir }}
+    src=proxysql dest=/etc/logrotate.d/proxysql
+
+- name: 把mysql执行路径添加至环境变量
+  lineinfile:
+    path: /etc/profile
+    line: export PATH=/opt:$PATH
+    insertafter: EOF
+    state: present
+
+- name: Rendering mysql_config_editor.sh
+  template:
+    src: mysql_config_editor.sh.j2
+    dest: "{{ package_dir }}mysql_config_editor.sh"
+    owner: root
+    group: root
+    mode: 774 
+
+- name: 实现日志轮转免密登录刷新日志
+  command: /usr/bin/expect "{{ package_dir }}"mysql_config_editor.sh
+
+#- name: 实现日志轮转免密登录刷新日志
+#  shell: |
+    #set timeout 300
+#    spawn mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+
+#    expect "Enter password:"
+#    send "{{ admin_login_password }}\n"
+
+#    expect " Continue? (Press y|Y for Yes, any other key for No) :"
+#    send "y\n"
+
+#    exit 0
+#  args:
+#    executable: /usr/bin/expect
+#  delegate_to: localhost
+
+#- name: Case sensitive password string match
+#  expect:
+#    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+#    responses:
+#      (?i)password: "{{ admin_login_password }}"
+  #no_log: true
+
+- name: 添加日志轮询任务计划
+  cron:
+    name: "logrotate"
+    minute: "55"
+    hour: "23"
+    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"

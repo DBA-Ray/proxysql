@@ -1,0 +1,155 @@
+# 安装proxysql并初始化
+- name: Remove current files
+  file:
+    path: /var/lib/proxysql 
+    state: absent
+  when: is_update
+
+- name: Install ProxySQL
+  yum:
+    name: "{{ source_file }}" 
+    state: present
+
+- name: Rendering profile
+  template:
+    src: proxysql.cnf.j2
+    dest: /etc/proxysql.cnf
+    owner: proxysql
+    group: proxysql
+
+- name: Start proxysql
+  systemd:
+    name: proxysql
+    state: started
+
+- name: Wait for ProxySQL is running
+  pause: seconds=3
+ 
+- name: Initial ProxySQL Admin Password
+  proxysql_global_variables:
+    login_user: 'admin'
+    login_password: 'admin'
+    variable: 'admin-admin_credentials'
+    value: "{{ admin_admin_credentials }}"
+    load_to_runtime: True
+    save_to_disk: True 
+
+- name: Initial ProxySQL Monitor Password
+  proxysql_global_variables:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    variable: 'mysql-monitor_password'
+    value: "{{ mysql_monitor_password }}"
+    load_to_runtime: True
+    save_to_disk: True    
+
+- name: Initial ProxySQL Server1
+  proxysql_backend_servers:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    hostgroup_id: 10 
+    hostname: "{{ hostvars[groups['dbservers'][0]]['inventory_hostname'] }}"
+    port: "{{ mysql_port }}"
+    compression: 1
+    max_connections: "{{ max_connections }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Initial ProxySQL Server2    
+  proxysql_backend_servers:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    hostgroup_id: 30
+    hostname: "{{ hostvars[groups['dbservers'][1]]['inventory_hostname'] }}"
+    port: "{{ mysql_port }}"
+    compression: 1
+    max_connections: "{{ max_connections }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Initial ProxySQL Server3
+  proxysql_backend_servers:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    hostgroup_id: 30
+    hostname: "{{ hostvars[groups['dbservers'][2]]['inventory_hostname'] }}"
+    port: "{{ mysql_port }}"
+    compression: 1
+    max_connections: "{{ max_connections }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Initial Proxysql Root User
+  proxysql_mysql_users:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    username: "root"
+    password: "{{ root_password }}"
+    default_hostgroup: 10
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Initial Proxysql Business User
+  proxysql_mysql_users:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    username: "{{ business_user }}"
+    password: "{{ business_password }}"
+    default_hostgroup: 10
+    state: present
+    load_to_runtime: yes
+    save_to_disk: yes
+
+- name: Encrypt mysql_users
+  proxysql_manage_config:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    action: "SAVE"
+    config_settings: "MYSQL USERS"
+    direction: "FROM"
+    config_layer: "RUNTIME"
+
+- name: Modifies query rule1
+  proxysql_query_rules:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    rule_id: 2
+    active: 1
+    match_digest: '^select.*for update$'
+    destination_hostgroup: 10
+    apply: 1
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Modifies query rule2
+  proxysql_query_rules:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    rule_id: 3
+    active: 1
+    match_digest: '^select.*from'
+    destination_hostgroup: 30
+    cache_ttl: "{{ cache_ttl }}"
+    apply: 1
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+
+#- name: Initial Proxysql Replication
+#  proxysql_replication_hostgroups:
+#    login_user: 'admin'
+#    login_password: 'admin'
+#    writer_hostgroup: 10
+#    reader_hostgroup: 30
+#    state: present
+#    load_to_runtime: True
+#    save_to_disk: True
+    #when: >
+         # proxysql_replication_hostgroups
+        

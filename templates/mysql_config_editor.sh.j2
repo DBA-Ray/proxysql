@@ -1,0 +1,13 @@
+#!/usr/bin/expect
+
+spawn /usr/bin/mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+
+expect *password*
+
+send {{ admin_login_password }}\r
+
+expect *Continue*
+
+send y\r
+
+interact
