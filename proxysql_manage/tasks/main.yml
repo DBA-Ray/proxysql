@@ -3,7 +3,7 @@
 - include: password.yml
 
 - include: modify_mysql_users.yml
-  when: modify_mysql_user
+  when: modify_mysql_users
 
 - include: modify_mysql_query_rules.yml
   when: modify_mysql_query_rules

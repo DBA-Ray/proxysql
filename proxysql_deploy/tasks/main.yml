@@ -7,3 +7,7 @@
 - include: prepare.yml
 
 - include: install.yml
+  when: proxysql_group_replication_hostgroups
+
+- include: install_traditional_replication.yml
+  when: proxysql_replication_hostgroups

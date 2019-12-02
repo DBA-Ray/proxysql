@@ -2,13 +2,15 @@
 # defaults file for proxysql_ray
 
 # 确定是否启用基于传统复制架构中的主机角色分配策略(默认启用基于组复制架构的主机角色分配策略)
-#proxysql_replication_hostgroups: False
+proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
+proxysql_replication_hostgroups: False
+# 是否升级安装
 is_update: True
+# 目录路径
 package_dir: /opt/
 proxysql_package: proxysql-2.0.8-1-centos7.x86_64.rpm
 source_file: /opt/{{ proxysql_package }}
 db_file: /var/lib/proxysql/proxysql.db
-
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'true'
@@ -33,7 +35,6 @@ mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,
 mysql_port: 3377
 max_connections: 10000
 # 基于组复制架构的主机角色分配策略
-proxysql_group_replication_hostgroups: True
 writer_hostgroup: 10
 backup_writer_hostgroup: 20
 reader_hostgroup: 30
@@ -41,6 +42,9 @@ offline_hostgroup: 40
 group_replication_active: 1
 writer_is_also_reader: 0
 max_transactions_behind: 3
+# 基于传统复制架构的主机角色分配策略
+traditional_writer_hostgroup: 50
+traditional_reader_hostgroup: 60
 # mysql users变量
 business_user: dxz
 # mysql query rules变量
