@@ -1,19 +1,20 @@
 # 复制proxysql安装包、mysql客户端和初始化sql脚本
 - name: 复制安装包
   copy: 
-    src: {{ package_name }}
-    dest: {{ package_dir }}
+    src: "{{ package_name }}"
+    dest: "{{ package_dir }}"
 
 - name: 解压安装包
   unarchive:
     src: "{{ package_dir }}{{ package_name }}"
-    dest: {{ package_dir }}
+    dest: "{{ package_dir }}"
     remote_src: yes
   
 - name: 复制日志轮询脚本
   copy:
-    src: proxysql 
+    src: "{{ package_dir }}proxysql" 
     dest: /etc/logrotate.d/proxysql
+    remote_src: yes 
 
 - name: 把mysql执行路径添加至环境变量
   lineinfile:
