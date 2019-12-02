@@ -1,0 +1,8 @@
+- name: Modify global variables
+  proxysql_global_variables:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    variable: "{{ global_variables }}"
+    value: "{{ global_variables_value }}"
+    load_to_runtime: True
+    save_to_disk: True

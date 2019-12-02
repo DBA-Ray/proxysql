@@ -1,0 +1,12 @@
+---
+# defaults file for proxysql_ray
+modify_mysql_user: False
+modify_mysql_query_rules: False
+modify_mysql_servers: False
+modify_global_variables: False
+business_user: 3355asdf
+cache_ttl: 10
+dbserver: 10.0.7.7
+olddbserver: 10.0.64.3
+global_variables: 'mysql-server_version'
+global_variables_value: '8.0.19'

@@ -1,0 +1,15 @@
+---
+# tasks file for proxysql_ray
+- include: password.yml
+
+- include: modify_mysql_users.yml
+  when: modify_mysql_user
+
+- include: modify_mysql_query_rules.yml
+  when: modify_mysql_query_rules
+
+- include: modify_mysql_servers.yml
+  when: modify_mysql_servers
+
+- include: modify_global_variables.yml
+  when: modify_global_variables

@@ -1,0 +1,18 @@
+---
+# vars file for proxysql_ray
+# 基础软件包
+packages:
+  - vim
+  - lrzsz
+  - telnet
+  - net-tools
+  - tree
+  - unzip
+  - libaio
+  - numactl
+  - perl-DBD-mysql
+  - expect
+
+
+vars_files:
+  - secrets.yml

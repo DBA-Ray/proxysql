@@ -1,0 +1,19 @@
+- name: Add mysql business user
+  proxysql_mysql_users:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    username: "{{ business_user }}"
+    password: "{{ business_password }}"
+    default_hostgroup: 10
+    state: present
+    load_to_runtime: yes
+    save_to_disk: yes
+
+- name: Encrypt mysql_users
+  proxysql_manage_config:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    action: "SAVE"
+    config_settings: "MYSQL USERS"
+    direction: "FROM"
+    config_layer: "RUNTIME"
