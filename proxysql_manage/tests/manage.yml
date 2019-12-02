@@ -1,6 +1,0 @@
----
-- hosts: proxysql
-  gather_facts: False
-  remote_user: root
-  roles:
-    - proxysql_manage
