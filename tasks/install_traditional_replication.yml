@@ -1,13 +1,7 @@
 # 安装proxysql并初始化
-- name: Remove current files
-  file:
-    path: /var/lib/proxysql 
-    state: absent
-  when: is_update
-
 - name: Install ProxySQL
   yum:
-    name: "{{ source_file }}" 
+    name: "{{ package_dir }}{{ proxysql_package }}"
     state: present
 
 - name: Rendering profile

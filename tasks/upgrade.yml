@@ -1,0 +1,47 @@
+- name: 停止proxysql服务
+  systemd:
+    name: proxysql
+    state: stopped
+  notify: Stop keepalived
+
+- name: 备份原proxysql的db文件
+  copy:
+    src: "{{ db_file }}"
+    dest: "{{ package_dir }}"
+    remote_src: yes
+    owner: proxysql
+    group: proxysql
+    mode: '0644'
+    backup: no
+
+- name: 卸载原版本proxysql
+  yum:
+    name: proxysql
+    state: absent
+
+- name: Remove current files
+  file:
+    path: /var/lib/proxysql
+    state: absent
+
+- name: Copy the latest ProxySQL
+  copy: 
+    src: "{{ proxysql_upgrade_package }}"
+    dest: "{{ package_dir }}"
+
+- name: Install the latest ProxySQL 
+  yum:
+    name: "{{ package_dir }}{{ proxysql_upgrade_package }}"
+    state: present
+
+- name: Restore db file
+  copy:
+    src: "{{ package_dir }}proxysql.db"
+    dest: "{{ db_file }}"
+    remote_src: yes
+    owner: proxysql
+    group: proxysql
+    mode: '0644'
+  notify: 
+    - Start ProxySQL
+    - Start keepalived

@@ -1,13 +1,19 @@
 ---
 # tasks file for proxysql_ray
 - include: password.yml
-
+  when: not is_update 
+ 
 - include: system_check.yml
+  when: not is_update
 
 - include: prepare.yml
+  when: not is_update  
 
 - include: install.yml
-  when: proxysql_group_replication_hostgroups
+  when: proxysql_group_replication_hostgroups and (not is_update)
 
-- include: install_traditional_replication.yml
-  when: proxysql_replication_hostgroups
+- include: install_traditional_replication.yml 
+  when: proxysql_replication_hostgroups and (not is_update)
+
+- include: upgrade.yml
+  when: is_update

@@ -10,8 +10,8 @@ is_update: True
 package_name: proxysql.zip
 package_dir: /opt/
 proxysql_package: proxysql-2.0.8-1-centos7.x86_64.rpm
-source_file: /opt/{{ proxysql_package }}
 db_file: /var/lib/proxysql/proxysql.db
+proxysql_upgrade_package: proxysql-2.0.8-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'true'

@@ -14,23 +14,6 @@
     name: mariadb
     state: absent
 
-- name: 备份原proxysql的db文件
-  copy:
-    src: "{{ db_file }}"
-    dest: "{{ package_dir }}"
-    remote_src: yes
-    owner: proxysql
-    group: proxysql
-    mode: '0644'
-    backup: yes
-  when: is_update
-
-- name: 卸载原版本proxysql
-  yum:
-    name: proxysql
-    state: absent
-  when: is_update
-
 - name: 安装基础软件包
   yum:
     name: "{{ packages }}"

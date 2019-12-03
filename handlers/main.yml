@@ -1,10 +1,19 @@
 ---
 # handlers file for proxysql_ray
+- name: Stop keepalived
+  systemd: 
+    name: keepalived
+    state: stopped
 
-- name: Restart ProxySQL
+- name: Start keepalived
+  systemd:
+    name: keepalived
+    state: started
+
+- name: Start ProxySQL
   systemd:
     name: proxysql
-    state: restarted
+    state: started
 
 - name: Reload systemd
   systemd:
