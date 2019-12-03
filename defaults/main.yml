@@ -5,7 +5,7 @@
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
 # 是否升级安装
-is_update: True
+is_update: False
 # 目录路径
 package_name: proxysql.zip
 package_dir: /opt/
@@ -17,7 +17,7 @@ proxysql_upgrade_package: proxysql-2.0.8-1-centos7.x86_64.rpm
 admin_web_enabled: 'true'
 admin_mysql_ifaces: '0.0.0.0:6032'
 # mysql变量
-mysql_interfaces: '0.0.0.0:3399'
+mysql_interfaces: '0.0.0.0:3377'
 mysql_shun_recovery_time_sec: 7
 mysql_threads: 16
 mysql_query_digests_lowercase: 'true'
@@ -49,7 +49,7 @@ traditional_reader_hostgroup: 60
 # mysql users变量
 business_user: dxz
 # mysql query rules变量
-cache_ttl: 50
+cache_ttl: 20
 # navicat_query_rule变量如果为True，则表示添加适配navicat的路由规则
 navicat_query_rule: True
 rule_id: 1
