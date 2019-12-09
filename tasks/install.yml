@@ -1,7 +1,7 @@
 # 安装proxysql并初始化
 - name: Install ProxySQL
   yum:
-    name: "{{ package_dir }}{{ proxysql_package }}" 
+    name: "{{ package_dir }}/{{ proxysql_package }}" 
     state: present
 
 - name: Rendering profile
@@ -43,39 +43,15 @@
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
     hostgroup_id: "{{ writer_hostgroup }}"
-    hostname: "{{ hostvars[groups['dbservers'][0]]['inventory_hostname'] }}"
+    hostname: "{{ item }}"
     port: "{{ mysql_port }}"
     compression: 1
     max_connections: "{{ max_connections }}"
     state: present
     load_to_runtime: True
     save_to_disk: True
-
-- name: Initial ProxySQL Server2    
-  proxysql_backend_servers:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    hostgroup_id: "{{ reader_hostgroup }}"
-    hostname: "{{ hostvars[groups['dbservers'][1]]['inventory_hostname'] }}"
-    port: "{{ mysql_port }}"
-    compression: 1
-    max_connections: "{{ max_connections }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Initial ProxySQL Server3
-  proxysql_backend_servers:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    hostgroup_id: "{{ reader_hostgroup }}"
-    hostname: "{{ hostvars[groups['dbservers'][2]]['inventory_hostname'] }}"
-    port: "{{ mysql_port }}"
-    compression: 1
-    max_connections: "{{ max_connections }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
+  with_lines: 
+    - cat /etc/hosts|grep mgr|awk '{print $1}'
 
 - name: Initial Proxysql Root User
   proxysql_mysql_users:
@@ -96,8 +72,8 @@
     password: "{{ business_password }}"
     default_hostgroup: "{{ writer_hostgroup }}"
     state: present
-    load_to_runtime: yes
-    save_to_disk: yes
+    load_to_runtime: True
+    save_to_disk: True
 
 - name: Encrypt mysql_users
   proxysql_manage_config:

@@ -6,13 +6,13 @@
 
 - name: 解压安装包
   unarchive:
-    src: "{{ package_dir }}{{ package_name }}"
+    src: "{{ package_dir }}/{{ package_name }}"
     dest: "{{ package_dir }}"
     remote_src: yes
   
 - name: 复制日志轮询脚本
   copy:
-    src: "{{ package_dir }}proxysql" 
+    src: "{{ package_dir }}/proxysql" 
     dest: /etc/logrotate.d/proxysql
     remote_src: yes 
 
@@ -26,13 +26,13 @@
 - name: Rendering mysql_config_editor.sh
   template:
     src: mysql_config_editor.sh.j2
-    dest: "{{ package_dir }}mysql_config_editor.sh"
+    dest: "{{ package_dir }}/mysql_config_editor.sh"
     owner: root
     group: root
     mode: 774 
 
 - name: 实现日志轮转免密登录刷新日志
-  command: /usr/bin/expect "{{ package_dir }}"mysql_config_editor.sh
+  command: /usr/bin/expect "{{ package_dir }}"/mysql_config_editor.sh
 
 #- name: 实现日志轮转免密登录刷新日志
 #  shell: |

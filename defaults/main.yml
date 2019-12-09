@@ -4,11 +4,13 @@
 # 默认启用基于组复制架构的主机角色分配策略
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
+# 是否安装percona tools
+percona_tools: True
 # 是否升级安装
 is_update: False
 # 目录路径
 package_name: proxysql.zip
-package_dir: /opt/
+package_dir: /opt
 proxysql_package: proxysql-2.0.8-1-centos7.x86_64.rpm
 db_file: /var/lib/proxysql/proxysql.db
 proxysql_upgrade_package: proxysql-2.0.8-1-centos7.x86_64.rpm

@@ -31,12 +31,12 @@
 
 - name: Install the latest ProxySQL 
   yum:
-    name: "{{ package_dir }}{{ proxysql_upgrade_package }}"
+    name: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
     state: present
 
 - name: Restore db file
   copy:
-    src: "{{ package_dir }}proxysql.db"
+    src: "{{ package_dir }}/proxysql.db"
     dest: "{{ db_file }}"
     remote_src: yes
     owner: proxysql

@@ -12,5 +12,9 @@
 - include: install.yml
   when: not is_update
   
+- include: install_tools
+  when: not is_update and percona_tools
+  
 - include: upgrade.yml
   when: is_update
+
