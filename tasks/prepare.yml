@@ -29,7 +29,7 @@
     dest: "{{ package_dir }}/mysql_config_editor.sh"
     owner: root
     group: root
-    mode: 774 
+    mode: 0774 
 
 - name: 实现日志轮转免密登录刷新日志
   command: /usr/bin/expect "{{ package_dir }}"/mysql_config_editor.sh
