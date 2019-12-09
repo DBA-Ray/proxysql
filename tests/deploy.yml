@@ -1,6 +1,20 @@
 ---
-- hosts: proxysql
-  gather_facts: False
+- hosts: all
+  gather_facts: True
   remote_user: root
+  pre_tasks:
+    - name: Add IP address,hostname of all hosts to all hosts
+      lineinfile:
+        dest: /etc/hosts
+        line: "{{ hostvars[item]['ansible_eth0']['ipv4']['address'] }} {{ hostvars[item]['inventory_hostname_short'] }}"
+        state: present
+      with_items: "{{ groups.all }}"
+      run_once: True
+
+- hosts: proxysql
+  gather_facts: True
+  remote_user: root
+  serial: 1
+  max_fail_percentage: 20
   roles:
     - dba_ray.proxysql
