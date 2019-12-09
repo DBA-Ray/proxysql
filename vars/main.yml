@@ -13,6 +13,5 @@ packages:
   - perl-DBD-mysql
   - expect
 
-
 vars_files:
   - secrets.yml

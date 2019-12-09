@@ -17,4 +17,3 @@
   
 - include: upgrade.yml
   when: is_update
-

@@ -21,4 +21,3 @@
 
 - name: Wait for ProxySQL is running
   pause: seconds=3
-
