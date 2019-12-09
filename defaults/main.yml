@@ -1,7 +1,7 @@
 ---
 # defaults file for proxysql_ray
 
-# 确定是否启用基于传统复制架构中的主机角色分配策略(默认启用基于组复制架构的主机角色分配策略)
+# 默认启用基于组复制架构的主机角色分配策略
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
 # 是否升级安装
