@@ -6,8 +6,6 @@ proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架�
 proxysql_replication_hostgroups: False
 # 是否安装percona tools
 percona_tools: True
-# 是否升级安装
-is_update: False
 # 目录路径
 package_name: proxysql.zip
 package_dir: /opt

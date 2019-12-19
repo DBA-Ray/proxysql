@@ -1,19 +1,15 @@
 ---
 # tasks file for proxysql_ray
 - include: password.yml
-  when: not is_update 
- 
+
 - include: system_check.yml
-  when: not is_update
 
 - include: prepare.yml
-  when: not is_update  
 
 - include: install.yml
-  when: not is_update
-  
+
 - include: install_tools
-  when: not is_update and percona_tools
-  
+  when: percona_tools
+
 - include: upgrade.yml
-  when: is_update
+  when: is_upgrade | default(False)

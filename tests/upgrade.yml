@@ -1,0 +1,9 @@
+- hosts: proxysql
+  gather_facts: True
+  remote_user: root
+  vars:
+    is_upgrade: True
+  serial: 1
+  max_fail_percentage: 20
+  roles:
+    - dba_ray.proxysql
