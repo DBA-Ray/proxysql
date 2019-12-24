@@ -1,8 +1,10 @@
 ---
 # tasks file for proxysql_ray
 - include: password.yml
+  when: not is_upgrade | default(False)
 
 - include: system_check.yml
+  when: not is_upgrade | default(False)
 
 - include: prepare.yml
 
