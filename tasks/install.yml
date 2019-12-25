@@ -1,7 +1,7 @@
 # 安装proxysql并初始化
 - name: Install ProxySQL
   yum:
-    name: "{{ package_dir }}/{{ proxysql_package }}" 
+    name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
 
 - name: Rendering profile
@@ -19,7 +19,7 @@
 - name: Wait for ProxySQL is running
   pause: seconds=3
   notify: Start keepalived
- 
+
 - name: Initial ProxySQL Admin Password
   proxysql_global_variables:
     login_user: 'admin'
@@ -27,7 +27,7 @@
     variable: 'admin-admin_credentials'
     value: "{{ admin_admin_credentials }}"
     load_to_runtime: True
-    save_to_disk: True 
+    save_to_disk: True
 
 - name: Initial ProxySQL Monitor Password
   proxysql_global_variables:
@@ -36,7 +36,7 @@
     variable: 'mysql-monitor_password'
     value: "{{ mysql_monitor_password }}"
     load_to_runtime: True
-    save_to_disk: True    
+    save_to_disk: True
 
 - name: Initial ProxySQL Server1
   proxysql_backend_servers:
@@ -50,7 +50,7 @@
     state: present
     load_to_runtime: True
     save_to_disk: True
-  with_lines: 
+  with_lines:
     - cat /etc/hosts|grep mgr|awk '{print $1}'
 
 - name: Initial Proxysql Root User

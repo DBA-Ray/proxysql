@@ -1,27 +1,24 @@
-# 复制proxysql安装包、mysql客户端和初始化sql脚本
-- name: 复制安装包
-  copy: 
-    src: "{{ package_name }}"
-    dest: "{{ package_dir }}"
-
-- name: 解压安装包
-  unarchive:
-    src: "{{ package_dir }}/{{ package_name }}"
-    dest: "{{ package_dir }}"
-    remote_src: yes
-  
-- name: 复制日志轮询脚本
+- name: Copy the installation package,mysql source and password-free login script
   copy:
-    src: "{{ package_dir }}/proxysql" 
-    dest: /etc/logrotate.d/proxysql
-    remote_src: yes 
+    src: "{{ proxysql_package }}"
+    dest: "{{ package_dir }}"
+  with_items:
+    - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
+    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
+    - { src: 'mysql80-community-release-el7-3.noarch.rpm', dest: "{{ package_dir }}" }
 
-- name: 把mysql执行路径添加至环境变量
-  lineinfile:
-    path: /etc/profile
-    line: export PATH=/opt:$PATH
-    insertafter: EOF
+- name: Install mysql client
+  yum:
+    name: "{{ item }}"
     state: present
+  with_items:
+    - "{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm"
+    - mysql-community-common.x86_64
+    - mysql-community-libs.x86_64
+    - mysql-community-client.x86_64
+  register: result
+  retries: 3
+  until: result is succeeded
 
 - name: Rendering mysql_config_editor.sh
   template:
@@ -29,10 +26,17 @@
     dest: "{{ package_dir }}/mysql_config_editor.sh"
     owner: root
     group: root
-    mode: 0774 
+    mode: 0774
 
-- name: 实现日志轮转免密登录刷新日志
+- name: Implement log rotation
   command: /usr/bin/expect "{{ package_dir }}"/mysql_config_editor.sh
+
+- name: Add the job of logrotate for proxysql
+  cron:
+    name: "logrotate"
+    minute: "55"
+    hour: "23"
+    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
 
 #- name: 实现日志轮转免密登录刷新日志
 #  shell: |
@@ -56,10 +60,3 @@
 #    responses:
 #      (?i)password: "{{ admin_login_password }}"
   #no_log: true
-
-- name: 添加日志轮询任务计划
-  cron:
-    name: "logrotate"
-    minute: "55"
-    hour: "23"
-    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
