@@ -9,13 +9,8 @@
 
 - name: Install mysql client
   yum:
-    name: "{{ item }}"
+    name: ["{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm", mysql-community-common.x86_64, mysql-community-libs.x86_64, mysql-community-client.x86_64]
     state: present
-  with_items:
-    - "{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm"
-    - mysql-community-common.x86_64
-    - mysql-community-libs.x86_64
-    - mysql-community-client.x86_64
   register: result
   retries: 3
   until: result is succeeded
