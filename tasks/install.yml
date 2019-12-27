@@ -38,7 +38,7 @@
     load_to_runtime: True
     save_to_disk: True
 
-- name: Initial ProxySQL Server1
+- name: Initial ProxySQL Server
   proxysql_backend_servers:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
