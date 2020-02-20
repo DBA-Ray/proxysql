@@ -1,3 +1,8 @@
+- name: Copy the latest ProxySQL
+  copy:
+    src: "{{ proxysql_upgrade_package }}"
+    dest: "{{ package_dir }}"
+
 - name: 停止proxysql服务
   systemd:
     name: proxysql
@@ -19,29 +24,10 @@
     name: proxysql
     state: absent
 
-- name: Remove current files
-  file:
-    path: /var/lib/proxysql
-    state: absent
-
-- name: Copy the latest ProxySQL
-  copy: 
-    src: "{{ proxysql_upgrade_package }}"
-    dest: "{{ package_dir }}"
-
-- name: Install the latest ProxySQL 
+- name: Install the latest ProxySQL
   yum:
     name: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
     state: present
-
-- name: Restore db file
-  copy:
-    src: "{{ package_dir }}/proxysql.db"
-    dest: "{{ db_file }}"
-    remote_src: yes
-    owner: proxysql
-    group: proxysql
-    mode: '0644'
-  notify: 
+  notify:
     - Start ProxySQL
     - Start keepalived
