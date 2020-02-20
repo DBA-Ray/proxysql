@@ -5,7 +5,7 @@
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
 # 是否安装percona tools
-percona_tools: True
+percona_tools: False
 # 目录路径
 package_dir: /opt
 proxysql_package: proxysql-2.0.9-1-centos7.x86_64.rpm
