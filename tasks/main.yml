@@ -12,7 +12,7 @@
 - include: install.yml
   when: not is_upgrade | default(False)
 
-- include: install_tools
+- include: install_tools.yml
   when: percona_tools | default(False)
 
 - include: upgrade.yml
