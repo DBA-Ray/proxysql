@@ -41,7 +41,7 @@ reader_hostgroup: 30
 offline_hostgroup: 40
 group_replication_active: 1
 writer_is_also_reader: 0
-max_transactions_behind: 3
+max_transactions_behind: 30
 # mysql users变量
 business_user: dxz
 # mysql query rules变量
