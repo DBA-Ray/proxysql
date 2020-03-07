@@ -24,7 +24,7 @@
     mode: 0774
 
 - name: Implement log rotation
-  command: /usr/bin/expect "{{ package_dir }}"/mysql_config_editor.sh
+  command: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
 
 - name: Add the job of logrotate for proxysql
   cron:

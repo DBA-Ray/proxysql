@@ -1,7 +1,7 @@
 ---
 # handlers file for proxysql_ray
 - name: Stop keepalived
-  systemd: 
+  systemd:
     name: keepalived
     state: stopped
 
