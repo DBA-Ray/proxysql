@@ -16,7 +16,7 @@
 
 - name: Install mysql client
   yum:
-    name: [mysql-community-common.x86_64,mysql-community-libs.x86_64,mysql-community-client.x86_64]
+    name: [mysql-community-common.x86_64, mysql-community-libs.x86_64, mysql-community-client.x86_64]
     state: present
   register: result
   retries: 3
@@ -32,7 +32,7 @@
 
 - name: Case sensitive password string match for logining proxysql
   shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
-  
+
 - name: Remove mysql_config_editor.sh
   file:
     path: "{{ package_dir }}/mysql_config_editor.sh"
@@ -60,7 +60,7 @@
     dest: "{{ item.dest }}"
     owner: proxysql
     group: proxysql
-  with_items: 
+  with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
     - { src: 'proxysql_initial_user.sql.j2', dest: "{{ package_dir }}/proxysql_initial_user.sql" }
 
@@ -76,10 +76,10 @@
 
 - name: Wait for ProxySQL is running
   pause: seconds=3
-    
+
 - name: Initial proxysql users
   shell: "mysql -uadmin -p'admin' -h 127.0.0.1 -P{{ admin_login_port }} --prompt='Admin> ' --default-auth=mysql_native_password < {{ package_dir }}/proxysql_initial_user.sql"
-  
+
 - name: Remove proxysql_initial_user.sql
   file:
     path: "{{ package_dir }}/proxysql_initial_user.sql"

@@ -8,7 +8,7 @@
     dest: /etc/selinux/config
     regexp: "^SELINUX="
     line: "SELINUX=disabled"
-    
+
 - name: 备份原proxysql的db文件
   copy:
     src: "{{ db_file }}"
@@ -22,16 +22,16 @@
 
 - name: 卸载系统自带的mariadb和已经安装的proxysql
   yum:
-    name: [mariadb,proxysql]
+    name: [mariadb, proxysql]
     state: absent
   when: whether_uninstall
-    
+
 - name: Remove proxysql directory
   file:
     path: /var/lib/proxysql
     state: absent
   when: whether_uninstall
-    
+
 - name: 安装基础软件包
   yum:
     name: "{{ packages }}"
