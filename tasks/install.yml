@@ -1,15 +1,73 @@
 # 安装proxysql并初始化
+
+- name: Copy the installation package,mysql source and password-free login script
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
+    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
+    - { src: 'mysql80-community-release-el7-3.noarch.rpm', dest: "{{ package_dir }}" }
+
+- name: Install mysql resource
+  yum:
+    name: "{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm"
+    state: present
+
+- name: Install mysql client
+  yum:
+    name: [mysql-community-common.x86_64,mysql-community-libs.x86_64,mysql-community-client.x86_64]
+    state: present
+  register: result
+  retries: 3
+  until: result is succeeded
+
+- name: Rendering mysql_config_editor.sh
+  template:
+    src: mysql_config_editor.sh.j2
+    dest: "{{ package_dir }}/mysql_config_editor.sh"
+    owner: root
+    group: root
+    mode: 0774
+
+- name: Case sensitive password string match for logining proxysql
+  shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
+  
+- name: Remove mysql_config_editor.sh
+  file:
+    path: "{{ package_dir }}/mysql_config_editor.sh"
+    state: absent
+
+#- name: Case sensitive password string match for logining proxysql
+#  expect:
+#    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+#    responses:
+#      Question:
+#        - (?i)password: "{{ admin_login_password }}"
+#        - (?i)Continue: y
+#  no_log: True
+
+- name: Add the job of logrotate for proxysql
+  cron:
+    name: "logrotate"
+    minute: "55"
+    hour: "23"
+    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
+
+- name: Rendering profile and proxysql_initial_user.sql
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: proxysql
+    group: proxysql
+  with_items: 
+    - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
+    - { src: 'proxysql_initial_user.sql.j2', dest: "{{ package_dir }}/proxysql_initial_user.sql" }
+
 - name: Install ProxySQL
   yum:
     name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
-
-- name: Rendering profile
-  template:
-    src: proxysql.cnf.j2
-    dest: /etc/proxysql.cnf
-    owner: proxysql
-    group: proxysql
 
 - name: Start proxysql
   systemd:
@@ -18,106 +76,11 @@
 
 - name: Wait for ProxySQL is running
   pause: seconds=3
-  notify: Start keepalived
-
-- name: Initial ProxySQL Admin Password
-  proxysql_global_variables:
-    login_user: 'admin'
-    login_password: 'admin'
-    variable: 'admin-admin_credentials'
-    value: "{{ admin_admin_credentials }}"
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Initial ProxySQL Monitor Password
-  proxysql_global_variables:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    variable: 'mysql-monitor_password'
-    value: "{{ mysql_monitor_password }}"
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Initial ProxySQL Server
-  proxysql_backend_servers:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    hostgroup_id: "{{ writer_hostgroup }}"
-    hostname: "{{ item }}"
-    port: "{{ mysql_port }}"
-    compression: 1
-    max_connections: "{{ max_connections }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-  with_lines:
-    - cat /etc/hosts|grep mgr|awk '{print $1}'
-
-- name: Initial Proxysql Root User
-  proxysql_mysql_users:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    username: "root"
-    password: "{{ root_password }}"
-    default_hostgroup: "{{ writer_hostgroup }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Initial Proxysql Business User
-  proxysql_mysql_users:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    username: "{{ business_user }}"
-    password: "{{ business_password }}"
-    default_hostgroup: "{{ writer_hostgroup }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Encrypt mysql_users
-  proxysql_manage_config:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    action: "SAVE"
-    config_settings: "MYSQL USERS"
-    direction: "FROM"
-    config_layer: "RUNTIME"
-
-- name: Modifies query rule1
-  proxysql_query_rules:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    rule_id: 2
-    active: 1
-    match_digest: '^select.*for update$'
-    destination_hostgroup: "{{ writer_hostgroup }}"
-    apply: 1
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Modifies query rule2
-  proxysql_query_rules:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    rule_id: 3
-    active: 1
-    match_digest: '^select.*from'
-    destination_hostgroup: "{{ reader_hostgroup }}"
-    cache_ttl: "{{ cache_ttl }}"
-    apply: 1
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-
-- name: Initial Proxysql Replication
-  proxysql_replication_hostgroups:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    writer_hostgroup: "{{ writer_hostgroup }}"
-    reader_hostgroup: "{{ reader_hostgroup }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
-  when: proxysql_replication_hostgroups
+    
+- name: Initial proxysql users
+  shell: "mysql -uadmin -p'admin' -h 127.0.0.1 -P{{ admin_login_port }} --prompt='Admin> ' --default-auth=mysql_native_password < {{ package_dir }}/proxysql_initial_user.sql"
+  
+- name: Remove proxysql_initial_user.sql
+  file:
+    path: "{{ package_dir }}/proxysql_initial_user.sql"
+    state: absent

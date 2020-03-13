@@ -1,0 +1,18 @@
+- name: Copy the percona-release package
+  copy: src=percona-release-0.1-6.noarch.rpm dest={{ package_dir }}
+
+- name: Install the percona-release package
+  yum:
+    name: "{{ package_dir }}/percona-release-0.1-6.noarch.rpm"
+    state: present
+
+- name: Copy the percona-release.repo
+  copy: src=percona-release.repo dest=/etc/yum.repos.d/percona-release.repo
+
+- name: Install pmm client
+  yum:
+    name: pmm-client.x86_64
+    state: latest
+  register: result
+  retries: 7
+  until: result is succeeded

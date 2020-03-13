@@ -1,19 +1,16 @@
 ---
 # tasks file for proxysql_ray
 - include: password.yml
-  when: not is_upgrade | default(False)
+  when: proxysql | default(False)
 
 - include: system_check.yml
-  when: not is_upgrade | default(False)
-
-- include: prepare.yml
-  when: not is_upgrade | default(False)
+  when: proxysql | default(False)
 
 - include: install.yml
-  when: not is_upgrade | default(False)
+  when: proxysql | default(False)
 
-- include: install_tools.yml
-  when: percona_tools | default(False)
+- include: install_pmm_client.yml
+  when: pmm_client | default(False)
 
 - include: upgrade.yml
   when: is_upgrade | default(False)

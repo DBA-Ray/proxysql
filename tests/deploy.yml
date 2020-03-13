@@ -1,20 +1,8 @@
 ---
-- hosts: all
+- hosts: "{{ deploy_hosts }}"
   gather_facts: True
   remote_user: root
-  pre_tasks:
-    - name: Add IP address,hostname of all hosts to all hosts
-      lineinfile:
-        dest: /etc/hosts
-        line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ hostvars[item]['inventory_hostname_short'] }}"
-        state: present
-      with_items: "{{ groups.all }}"
-      run_once: True
-
-- hosts: proxysql
-  gather_facts: True
-  remote_user: root
-  serial: 1
-  max_fail_percentage: 20
+  vars:
+    proxysql: True # Whether to install proxysql
   roles:
     - dba_ray.proxysql

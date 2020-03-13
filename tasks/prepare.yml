@@ -1,16 +1,20 @@
 - name: Copy the installation package,mysql source and password-free login script
   copy:
-    src: "{{ proxysql_package }}"
-    dest: "{{ package_dir }}"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
   with_items:
     - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
     - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
     - { src: 'mysql80-community-release-el7-3.noarch.rpm', dest: "{{ package_dir }}" }
 
+- name: Install mysql resource
+  yum:
+    name: "{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm"
+    state: present
+
 - name: Install mysql client
   yum:
-    name: ["{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm", \
-    mysql-community-common.x86_64, mysql-community-libs.x86_64, mysql-community-client.x86_64]
+    name: [mysql-community-common.x86_64,mysql-community-libs.x86_64,mysql-community-client.x86_64]
     state: present
   register: result
   retries: 3
@@ -24,8 +28,17 @@
     group: root
     mode: 0774
 
-- name: Implement log rotation
-  command: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
+#- name: Implement log rotation
+# shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
+  
+- name: Case sensitive password string match for logining proxysql
+  expect:
+    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+    responses:
+      Question:
+        - (?i)password: "{{ admin_login_password }}"
+        - (?i)Continue: y
+  no_log: true
 
 - name: Add the job of logrotate for proxysql
   cron:
@@ -33,26 +46,3 @@
     minute: "55"
     hour: "23"
     job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
-
-#- name: 实现日志轮转免密登录刷新日志
-#  shell: |
-    #set timeout 300
-#    spawn mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
-
-#    expect "Enter password:"
-#    send "{{ admin_login_password }}\n"
-
-#    expect " Continue? (Press y|Y for Yes, any other key for No) :"
-#    send "y\n"
-
-#    exit 0
-#  args:
-#    executable: /usr/bin/expect
-#  delegate_to: localhost
-
-#- name: Case sensitive password string match
-#  expect:
-#    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
-#    responses:
-#      (?i)password: "{{ admin_login_password }}"
-  #no_log: true

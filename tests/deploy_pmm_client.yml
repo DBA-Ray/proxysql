@@ -1,0 +1,8 @@
+---
+- hosts: proxysql_pro1:proxysql_pro2
+  gather_facts: True
+  remote_user: root
+  vars:
+    pmm_client: True # Whether to install pmm client
+  roles:
+    - dba_ray.proxysql
