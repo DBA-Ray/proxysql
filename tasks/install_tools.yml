@@ -1,9 +1,6 @@
-- name: Copy the percona-release package
-  copy: src=percona-release-0.1-6.noarch.rpm dest={{ package_dir }}
-
-- name: Install the percona-release package
+- name: Install the percona-release repository
   yum:
-    name: "{{ package_dir }}/percona-release-0.1-6.noarch.rpm"
+    name: https://www.percona.com/downloads/percona-release/redhat/LATEST/percona-release-latest.noarch.rpm
     state: present
 
 - name: Copy the percona-release.repo
