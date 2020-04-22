@@ -59,6 +59,8 @@ mysql_variables=
         server_version="{{ mysql_server_version }}"
         max_allowed_packet={{ mysql_max_allowed_packet }}
         default_sql_mode="{{ mysql_default_sql_mode }}"
+        admin-stats_mysql_query_digest_to_disk=1
+        mysql-monitor_groupreplication_max_transactions_behind_count={{ max_transactions_behind }}
 }
 
 
