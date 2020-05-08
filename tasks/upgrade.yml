@@ -3,11 +3,15 @@
     src: "{{ proxysql_upgrade_package }}"
     dest: "{{ package_dir }}"
 
+- name: Stop keepalived
+  systemd:
+    name: keepalived
+    state: stopped
+
 - name: 停止proxysql服务
   systemd:
     name: proxysql
     state: stopped
-  notify: Stop keepalived
 
 - name: 备份原proxysql的db文件
   copy:
