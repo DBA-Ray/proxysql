@@ -11,13 +11,16 @@
 
 - name: 备份原proxysql的db文件
   copy:
-    src: "{{ db_file }}"
+    src: "{{ item }}"
     dest: "{{ package_dir }}"
     remote_src: yes
     owner: proxysql
     group: proxysql
     mode: '0644'
     backup: no
+  with_items:
+    - "{{ db_file }}"
+    - "{{ db_stats_file }}"
 
 - name: 卸载原版本proxysql
   yum:

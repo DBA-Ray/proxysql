@@ -9,9 +9,10 @@ proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架�
 proxysql_replication_hostgroups: False
 # 目录路径
 package_dir: /var/local
-proxysql_package: proxysql-2.0.10-1-centos7.x86_64.rpm
+proxysql_package: proxysql-2.0.11-1-centos7.x86_64.rpm
 db_file: /var/lib/proxysql/proxysql.db
-proxysql_upgrade_package: proxysql-2.0.10-1-centos7.x86_64.rpm
+db_stats_file: /var/lib/proxysql/proxysql_stats.db
+proxysql_upgrade_package: proxysql-2.0.11-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'true'
