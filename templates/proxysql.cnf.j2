@@ -61,6 +61,8 @@ mysql_variables=
         default_sql_mode="{{ mysql_default_sql_mode }}"
         admin-stats_mysql_query_digest_to_disk=1
         mysql-monitor_groupreplication_max_transactions_behind_count={{ max_transactions_behind }}
+        mysql-wait_timeout={{ mysql_wait_timeout }}
+        mysql-log_unhealthy_connections='false'
 }
 
 
