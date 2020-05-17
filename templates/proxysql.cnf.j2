@@ -40,6 +40,7 @@ admin_variables=
         web_enabled = "{{ admin_web_enabled }}"
         {% endif %}
    mysql_ifaces="{{ admin_mysql_ifaces }}"
+        stats_mysql_query_digest_to_disk=0
 }
 
 mysql_variables=
@@ -47,7 +48,6 @@ mysql_variables=
 	    interfaces="{{ mysql_interfaces }}"
         shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
         threads={{ mysql_threads }}
-        query_digests_lowercase="{{ mysql_query_digests_lowercase }}"
         query_cache_size_MB={{ mysql_query_cache_size_MB }}
         threshold_resultset_size ={{ mysql_threshold_resultset_size }}
         monitor_username="{{ mysql_monitor_username }}"
@@ -59,10 +59,12 @@ mysql_variables=
         server_version="{{ mysql_server_version }}"
         max_allowed_packet={{ mysql_max_allowed_packet }}
         default_sql_mode="{{ mysql_default_sql_mode }}"
-        admin-stats_mysql_query_digest_to_disk=1
-        mysql-monitor_groupreplication_max_transactions_behind_count={{ max_transactions_behind }}
-        mysql-wait_timeout={{ mysql_wait_timeout }}
-        mysql-log_unhealthy_connections='false'
+        monitor_groupreplication_max_transactions_behind_count={{ max_transactions_behind }}
+        wait_timeout={{ mysql_wait_timeout }}
+        log_unhealthy_connections='false'
+        query_digests_lowercase='true'
+        query_digests_normalize_digest_text='true'
+        query_digests_track_hostname='true'
 }
 
 
