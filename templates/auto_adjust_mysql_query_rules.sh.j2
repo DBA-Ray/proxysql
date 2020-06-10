@@ -1,0 +1,70 @@
+#!/bin/bash
+
+#Author DBA R
+
+if [ $# -ne 1 ]
+
+then
+
+    echo "usage: `basename $0` [admin_password]"
+
+    exit 1
+
+fi
+
+source /etc/profile
+
+admin_passwd=${1}
+
+#向钉钉发送消息方法
+function SendMessageToDingding()
+{ # 发送钉钉消息
+Dingding_Url="https://oapi.dingtalk.com/robot/send?access_token=134b660cd50a6410cb77d4b75ccbf65e4cd387ffcfc8347a9161910a751d3330" 
+curl "${Dingding_Url}" -H 'Content-Type: application/json' -d "
+ { \"msgtype\":\"text\",
+\"text\":{
+\"content\":\"${1}\"},
+\"at\":{
+\"atMobiles\":[\"15668661298\"],
+\"isAtAll\":false} }"
+}
+
+function auto_adjust_mysql_query_rules() {
+
+c=2
+
+offline_mysql_count=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select count(status) as count_offline_mysql from stats_mysql_connection_pool where status <> 'ONLINE'\G;"\
+ | grep count_offline_mysql: | awk '{ printf $2 }'`
+
+if [ ${offline_mysql_count} -gt 0 ] ; then
+
+   mysql_count=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select count(status) as count_mysql from stats_mysql_connection_pool\G;"\
+ | grep count_mysql: | awk '{ printf $2 }'`
+
+if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} ] ; then
+
+   SendMessageToDingding "The {{ ansible_hostname }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
+
+   echo "The {{ ansible_hostname }} will adjust all read requests to the primary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/abnormal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+
+   mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "update mysql_query_rules set active=0 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
+
+elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
+
+     SendMessageToDingding "The {{ ansible_hostname }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+
+     echo "The {{ ansible_hostname }} will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+
+     mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "update mysql_query_rules set active=1 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
+
+fi
+
+fi
+
+}
+
+auto_adjust_mysql_query_rules

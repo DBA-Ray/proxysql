@@ -30,6 +30,14 @@
     group: root
     mode: 0774
 
+- name: Rendering auto_adjust_mysql_query_rules.sh
+  template:
+    src: auto_adjust_mysql_query_rules.sh.j2
+    dest: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+    owner: proxysql
+    group: proxysql
+    mode: 0774
+
 - name: Case sensitive password string match for logining proxysql
   shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
 
@@ -77,10 +85,10 @@
 - name: Wait for ProxySQL is running
   pause: seconds=3
 
-- name: Initial proxysql users
-  shell: "mysql -uadmin -p'admin' -h 127.0.0.1 -P{{ admin_login_port }} --prompt='Admin> ' --default-auth=mysql_native_password < {{ package_dir }}/proxysql_initial_user.sql"
+- name: Initial proxysql users and scheduler
+  shell: "mysql -uadmin -p'admin' -h 127.0.0.1 -P{{ admin_login_port }} --prompt='Admin> ' --default-auth=mysql_native_password < {{ package_dir }}/proxysql_initial_user_scheduler.sql"
 
-- name: Remove proxysql_initial_user.sql
+- name: Remove proxysql_initial_user_scheduler.sql
   file:
-    path: "{{ package_dir }}/proxysql_initial_user.sql"
+    path: "{{ package_dir }}/proxysql_initial_user_scheduler.sql"
     state: absent

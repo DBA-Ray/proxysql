@@ -3,6 +3,8 @@ set mysql-monitor_password='{{ mysql_monitor_password }}';
 delete from mysql_users;
 insert into mysql_users(username,password,default_hostgroup) values ('root','{{ root_password }}',{{ writer_hostgroup }});
 insert into mysql_users(username,password,default_hostgroup) values ('{{ business_user }}','{{ business_password }}',{{ writer_hostgroup }});
+insert into scheduler (id,interval_ms,filename,arg1,comment) values \
+(1,3000,'/var/lib/proxysql/auto_adjust_mysql_query_rules.sh','{{ admin_login_password }}','Automatic adjust query rules when offline status over half');
 load mysql users to runtime;
 save mysql users from runtime;
 save mysql users to disk;
@@ -10,3 +12,5 @@ load mysql variables to runtime;
 save mysql variables to disk;
 load admin variables to runtime;
 save admin variables to disk;
+load scheduler to runtime;
+save scheduler to disk;
