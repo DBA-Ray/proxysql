@@ -54,12 +54,22 @@ if [ ${offline_mysql_count} -gt 0 ] ; then
 
    elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
 
-     SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+   query_active=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select active from mysql_query_rules where destination_hostgroup is not null and destination_hostgroup <> 10\G;"\
+ | grep active: | awk '{ printf $2 }'`
 
-     echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+        if [ ${query_active} -ne 1 ] ; then
 
-     mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+           SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+
+           echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+
+           mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=1 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
+
+	   else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} doesn't need adjust all read requests to the secondary."
+
+       fi
 
    fi
 
