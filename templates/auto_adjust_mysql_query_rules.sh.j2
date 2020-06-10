@@ -43,7 +43,7 @@ if [ ${offline_mysql_count} -gt 0 ] ; then
 -e "select count(status) as count_mysql from stats_mysql_connection_pool\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
 
-if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} ] ; then
+   if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} ] ; then
 
    SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
@@ -52,7 +52,7 @@ if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} ] ; then
    mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=0 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
-elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
+   elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
 
      SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
 
@@ -61,7 +61,7 @@ elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
      mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=1 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
-fi
+   fi
 
 fi
 
