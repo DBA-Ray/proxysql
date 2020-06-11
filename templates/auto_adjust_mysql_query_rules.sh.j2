@@ -14,7 +14,7 @@ fi
 
 #source /etc/profile
 
-admin_passwd=${1}
+export MYSQL_PWD=${1}
 
 #向钉钉发送消息方法
 function SendMessageToDingding()
@@ -33,19 +33,19 @@ function auto_adjust_mysql_query_rules() {
 
 c=2
 
-offline_mysql_count=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+offline_mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select count(distinct(a.srv_host)) as count_offline_mysql from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
 
 if [ ${offline_mysql_count} -gt 0 ] ; then
 
-   mysql_count=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select count(distinct(srv_host)) as count_mysql from stats_mysql_connection_pool\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
 
    if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} ] ; then
 
-   query_active=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select active from mysql_query_rules where destination_hostgroup is not null and destination_hostgroup <> 10\G;"\
  | grep active: | awk '{ printf $2 }'`
 
@@ -53,9 +53,9 @@ if [ ${offline_mysql_count} -gt 0 ] ; then
 
    SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
-   echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/abnormal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+   echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/abnormal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log
 
-   mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=0 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
       else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} has adjusted all read requests to the primary."
@@ -64,7 +64,7 @@ if [ ${offline_mysql_count} -gt 0 ] ; then
 
    elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} ] ; then
 
-   query_active=`mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select active from mysql_query_rules where destination_hostgroup is not null and destination_hostgroup <> 10\G;"\
  | grep active: | awk '{ printf $2 }'`
 
@@ -74,7 +74,7 @@ if [ ${offline_mysql_count} -gt 0 ] ; then
 
            echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
 
-           mysql -u admin -p${admin_passwd} -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+           mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=1 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
 	   else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} has adjusted all read requests to the secondary."
