@@ -15,7 +15,7 @@ db_stats_file: /var/lib/proxysql/proxysql_stats.db
 proxysql_upgrade_package: proxysql-2.0.11-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
-admin_web_enabled: 'true'
+admin_web_enabled: 'false'
 admin_login_port: 6032
 admin_mysql_ifaces: "0.0.0.0:{{ admin_login_port }}"
 # mysql变量
