@@ -38,3 +38,12 @@
   notify:
     - Start ProxySQL
     - Start keepalived
+
+- name: Rename proxysql.rpmsave file to proxysql
+  copy:
+    src: /etc/logrotate.d/proxysql.rpmsave
+    dest: /etc/logrotate.d/proxysql
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0644'

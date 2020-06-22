@@ -1,6 +1,6 @@
 # 安装proxysql并初始化
 
-- name: Copy the installation package,mysql source and password-free login script
+- name: Copy the installation package,mysql source and logrotate script
   copy:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
