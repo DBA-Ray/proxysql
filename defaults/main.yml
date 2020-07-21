@@ -28,7 +28,7 @@ mysql_monitor_username: 'repl'
 mysql_monitor_connect_interval: 2000
 mysql_monitor_ping_interval: 2000
 mysql_monitor_read_only_interval: 2000
-mysql_monitor_groupreplication_healthcheck_timeout: 1000
+mysql_monitor_groupreplication_healthcheck_timeout: 7000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 6000
 mysql_server_version: '8.0.20'
