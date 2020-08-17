@@ -77,6 +77,11 @@
     name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
 
+- name: Enable proxysql server
+  systemd:
+    name: proxysql
+    enabled: yes
+
 - name: Start proxysql
   systemd:
     name: proxysql

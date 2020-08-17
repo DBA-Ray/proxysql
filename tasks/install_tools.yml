@@ -1,14 +1,22 @@
 - name: Install the percona-release repository
   yum:
-    name: https://www.percona.com/downloads/percona-release/redhat/LATEST/percona-release-latest.noarch.rpm
+    name: https://repo.percona.com/yum/percona-release-latest.noarch.rpm
     state: present
+  register: percona_release
+  retries: 3
+  until: percona_release is succeeded
 
-- name: Copy the percona-release.repo
-  copy: src=percona-release.repo dest=/etc/yum.repos.d/percona-release.repo
-
-- name: Install the percona tools
+- name: Unstall pmm-client.x86_64
   yum:
     name: pmm-client.x86_64
+    state: absent
+
+- name: Install the percona tools for pmm2-client
+  yum:
+    name: "{{ tools }}"
+  vars:
+    tools:
+    - pmm2-client.x86_64
     state: latest
   register: result
   retries: 7

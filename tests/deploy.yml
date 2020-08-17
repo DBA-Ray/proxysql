@@ -4,5 +4,6 @@
   remote_user: root
   vars:
     proxysql: True # Whether to install proxysql
+    pmm_client: True # Whether to install pmm client
   roles:
     - dba_ray.proxysql
