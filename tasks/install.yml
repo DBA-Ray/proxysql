@@ -62,7 +62,7 @@
     hour: "23"
     job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
 
-- name: Rendering profile and proxysql_initial_user.sql
+- name: Rendering proxysql profile
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -70,7 +70,6 @@
     group: proxysql
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
-    - { src: 'proxysql_initial_user.sql.j2', dest: "{{ package_dir }}/proxysql_initial_user.sql" }
 
 - name: Install ProxySQL
   yum:
@@ -90,10 +89,52 @@
 - name: Wait for ProxySQL is running
   pause: seconds=3
 
-- name: Initial proxysql users and scheduler
-  shell: "mysql -uadmin -p'admin' -h 127.0.0.1 -P{{ admin_login_port }} --prompt='Admin> ' --default-auth=mysql_native_password < {{ package_dir }}/proxysql_initial_user_scheduler.sql"
+- name: Modify global variables
+  proxysql_global_variables:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    variable: "{{ item.variable }}"
+    value: "{{ item.value }}"
+    load_to_runtime: True
+    save_to_disk: True
+  with_items:
+    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }}" }
+    - { variable: 'mysql-monitor_password', value: "{{ mysql_monitor_password }}" }
 
-- name: Remove proxysql_initial_user_scheduler.sql
-  file:
-    path: "{{ package_dir }}/proxysql_initial_user_scheduler.sql"
-    state: absent
+- name: Add mysql users
+  proxysql_mysql_users:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    username: "{{ item.user }}"
+    password: "{{ item.password }}"
+    default_hostgroup: 10
+    transaction_persistent: yes
+    max_connections: 10000
+    state: present
+    load_to_runtime: yes
+    save_to_disk: yes
+  with_items:
+    - { username: 'root', password: "{{ root_password }}" }
+    - { username: "{{ business_user }}", password: "{{ business_password }}" }
+
+- name: Encrypt mysql_users
+  proxysql_manage_config:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    action: "SAVE"
+    config_settings: "MYSQL USERS"
+    direction: "FROM"
+    config_layer: "RUNTIME"
+  tags: manage_user
+
+- name: Add proxysql scheduler
+  proxysql_scheduler:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    active: 1
+    interval_ms: 3000
+    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+    arg1: "{{ admin_login_password }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
