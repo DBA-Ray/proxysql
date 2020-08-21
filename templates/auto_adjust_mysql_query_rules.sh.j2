@@ -69,8 +69,8 @@ if [ ${offline_mysql_count} -gt 0 -o ${query_active} -ne 1 ] ; then
 
 	   #else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} has adjusted all read requests to the secondary."
 
-   else 
-   
+   else
+
    SendMessageToDingding "Unknow errors on {{ ansible_hostname }}_{{ ansible_default_ipv4.address }}"
 
    fi
