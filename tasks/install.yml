@@ -30,16 +30,9 @@
     group: root
     mode: 0774
 
-- name: Rendering auto_adjust_mysql_query_rules.sh
-  template:
-    src: auto_adjust_mysql_query_rules.sh.j2
-    dest: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
-    owner: proxysql
-    group: proxysql
-    mode: 0774
-
 - name: Case sensitive password string match for logining proxysql
   shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
+  run_once: true
 
 - name: Remove mysql_config_editor.sh
   file:
@@ -62,6 +55,11 @@
     hour: "23"
     job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
 
+- name: Install ProxySQL
+  yum:
+    name: "{{ package_dir }}/{{ proxysql_package }}"
+    state: present
+
 - name: Rendering proxysql profile
   template:
     src: "{{ item.src }}"
@@ -70,11 +68,6 @@
     group: proxysql
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
-
-- name: Install ProxySQL
-  yum:
-    name: "{{ package_dir }}/{{ proxysql_package }}"
-    state: present
 
 - name: Enable proxysql server
   systemd:
@@ -86,10 +79,29 @@
     name: proxysql
     state: started
 
+- name: Rendering auto_adjust_mysql_query_rules.sh
+  template:
+    src: auto_adjust_mysql_query_rules.sh.j2
+    dest: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+    owner: proxysql
+    group: proxysql
+    mode: 0774
+
 - name: Wait for ProxySQL is running
   pause: seconds=3
 
-- name: Modify global variables
+- name: Modify admin password
+  proxysql_global_variables:
+    login_user: 'admin'
+    login_password: 'admin'
+    variable: "{{ item.variable }}"
+    value: "{{ item.value }}"
+    load_to_runtime: True
+    save_to_disk: True
+  with_items:
+    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }}" }
+    
+- name: Modify mysql-monitor password
   proxysql_global_variables:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
@@ -98,14 +110,13 @@
     load_to_runtime: True
     save_to_disk: True
   with_items:
-    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }}" }
     - { variable: 'mysql-monitor_password', value: "{{ mysql_monitor_password }}" }
 
-- name: Add mysql users
+- name: Add mysql_users
   proxysql_mysql_users:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
-    username: "{{ item.user }}"
+    username: "{{ item.username }}"
     password: "{{ item.password }}"
     default_hostgroup: 10
     transaction_persistent: yes

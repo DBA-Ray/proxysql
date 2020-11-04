@@ -1,7 +1,7 @@
 ---
 # defaults file for proxysql_ray
 # Whether to uninstall the original service and then install it
-whether_uninstall: True
+whether_uninstall: False
 # Which hosts to deploy
 deploy_hosts: proxysql_pro1
 # 默认启用基于组复制架构的主机角色分配策略
@@ -9,10 +9,10 @@ proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架�
 proxysql_replication_hostgroups: False
 # 目录路径
 package_dir: /var/local
-proxysql_package: proxysql-2.0.12-1-centos7.x86_64.rpm
+proxysql_package: proxysql-2.0.15-1-centos7.x86_64.rpm
 db_file: /var/lib/proxysql/proxysql.db
 db_stats_file: /var/lib/proxysql/proxysql_stats.db
-proxysql_upgrade_package: proxysql-2.0.12-1-centos7.x86_64.rpm
+proxysql_upgrade_package: proxysql-2.0.15-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'false'
@@ -31,12 +31,12 @@ mysql_monitor_read_only_interval: 2000
 mysql_monitor_groupreplication_healthcheck_timeout: 7000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 6000
-mysql_server_version: '8.0.21'
+mysql_server_version: '8.0.22'
 mysql_max_allowed_packet: 1072693248
 mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
 # mysql servers变量
-mgr_group: mgr_pro2
+mgr_group: mgr_pro1
 mysql_port: 3377
 max_connections: 2000
 # 基于组复制架构的主机角色分配策略（传统复制也可以使用）

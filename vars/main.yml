@@ -12,6 +12,8 @@ packages:
   - numactl
   - perl-DBD-mysql
   - expect
+  - MySQL-python
+  - zstd
 
 vars_files:
   - secrets.yml
