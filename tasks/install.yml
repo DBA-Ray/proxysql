@@ -127,6 +127,7 @@
   with_items:
     - { username: 'root', password: "{{ root_password }}" }
     - { username: "{{ business_user }}", password: "{{ business_password }}" }
+    - { username: 'audit', password: "{{ mysql_monitor_password }}" }
 
 - name: Encrypt mysql_users
   proxysql_manage_config:
