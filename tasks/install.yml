@@ -7,12 +7,14 @@
   with_items:
     - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
     - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
-    - { src: 'mysql80-community-release-el7-3.noarch.rpm', dest: "{{ package_dir }}" }
 
 - name: Install mysql resource
   yum:
-    name: "{{ package_dir }}/mysql80-community-release-el7-3.noarch.rpm"
+    name: "{{ remote_repo }}"
     state: present
+
+- name: Copy the mysql-community.repo
+  copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
 
 - name: Install mysql client
   yum:
@@ -30,23 +32,22 @@
     group: root
     mode: 0774
 
-- name: Case sensitive password string match for logining proxysql
-  shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
-  run_once: true
+#- name: Case sensitive password string match for logining proxysql
+#  shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
 
 - name: Remove mysql_config_editor.sh
   file:
     path: "{{ package_dir }}/mysql_config_editor.sh"
     state: absent
 
-#- name: Case sensitive password string match for logining proxysql
-#  expect:
-#    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
-#    responses:
-#      Question:
-#        - (?i)password: "{{ admin_login_password }}"
-#        - (?i)Continue: y
-#  no_log: True
+- name: Case sensitive password string match for logining proxysql
+  expect:
+    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+    responses:
+      (?i)password: "{{ admin_login_password }}"
+      (?i)Continue: y
+    echo: yes
+  no_log: True
 
 - name: Add the job of logrotate for proxysql
   cron:

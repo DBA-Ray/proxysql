@@ -7,6 +7,8 @@ deploy_hosts: proxysql_pro1
 # 默认启用基于组复制架构的主机角色分配策略
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
+# Repo info
+remote_repo: https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm
 # 目录路径
 package_dir: /var/local
 proxysql_package: proxysql-2.0.15-1-centos7.x86_64.rpm

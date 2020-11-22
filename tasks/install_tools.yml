@@ -6,6 +6,9 @@
   retries: 3
   until: percona_release is succeeded
 
+- name: Copy the percona-release.repo
+  copy: src=percona-original-release.repo dest=/etc/yum.repos.d/percona-original-release.repo
+
 - name: Unstall pmm-client.x86_64
   yum:
     name: pmm-client.x86_64

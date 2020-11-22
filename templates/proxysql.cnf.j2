@@ -58,18 +58,12 @@ mysql_variables=
         max_connections={{ mysql_max_connections }}
         server_version="{{ mysql_server_version }}"
         max_allowed_packet={{ mysql_max_allowed_packet }}
-        default_sql_mode="{{ mysql_default_sql_mode }}"
         monitor_groupreplication_healthcheck_timeout="{{ mysql_monitor_groupreplication_healthcheck_timeout }}"
-        monitor_groupreplication_max_transactions_behind_count={{ max_transactions_behind }}
         wait_timeout={{ mysql_wait_timeout }}
         log_unhealthy_connections="false"
         query_digests_lowercase="true"
         query_digests_normalize_digest_text="true"
         query_digests_track_hostname="false"
-        default_character_set_results="utf8mb4"
-        default_character_set_connection="utf8mb4"
-        default_character_set_client="utf8mb4"
-        default_character_set_database="utf8mb4"
         default_collation_connection="utf8mb4_0900_ai_ci"
 }
 

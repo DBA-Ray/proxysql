@@ -9,6 +9,12 @@
     regexp: "^SELINUX="
     line: "SELINUX=disabled"
 
+- name: Stop proxysql server
+  systemd:
+    name: proxysql
+    state: stopped
+  when: whether_uninstall
+
 - name: 备份原proxysql的db文件
   copy:
     src: "{{ db_file }}"
@@ -36,6 +42,9 @@
   yum:
     name: "{{ packages }}"
     state: latest
+- name: Install pexpect
+  pip:
+    name: pexpect
 
 #- name: 更新所有软件包
 #  yum:
