@@ -100,7 +100,7 @@
     load_to_runtime: True
     save_to_disk: True
   with_items:
-    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }}" }
+    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }};repl:{{ mysql_monitor_password }}" }
     
 - name: Modify mysql-monitor password
   proxysql_global_variables:

@@ -42,10 +42,16 @@
   yum:
     name: "{{ packages }}"
     state: latest
+
+- name: Upgrade pip
+  pip:
+    name: pip
+    state: latest
+
 - name: Install pexpect
   pip:
     name: pexpect
-
+    state: latest
 #- name: 更新所有软件包
 #  yum:
 #    name: '*'

@@ -39,13 +39,19 @@ admin_variables=
 {% if admin_web_enabled is defined %}
         web_enabled = "{{ admin_web_enabled }}"
         {% endif %}
-   mysql_ifaces="{{ admin_mysql_ifaces }}"
+mysql_ifaces="{{ admin_mysql_ifaces }}"
         stats_mysql_query_digest_to_disk=0
+        cluster_username="repl"
+        cluster_password="{{ mysql_monitor_password }}"
+        cluster_mysql_query_rules_diffs_before_sync=1
+        cluster_mysql_servers_diffs_before_sync=1
+        cluster_mysql_users_diffs_before_sync=1
+        cluster_proxysql_servers_diffs_before_sync=1
 }
 
 mysql_variables=
 {
-	    interfaces="{{ mysql_interfaces }}"
+        interfaces="{{ mysql_interfaces }}"
         shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
         threads={{ mysql_threads }}
         query_cache_size_MB={{ mysql_query_cache_size_MB }}
@@ -82,6 +88,17 @@ mysql_servers =
 {% endfor %}
 )
 
+proxysql_servers =
+(
+{% for srv in groups.proxysql_pro1 %}
+  {
+    hostname="{{ hostvars[srv]['ansible_default_ipv4']['address'] }}",
+    port=6032,
+    weight=0,
+    comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
+  }{% if not loop.last %},{% endif %}
+{% endfor %}
+)
 
 # defines all the MySQL users
 mysql_users:
