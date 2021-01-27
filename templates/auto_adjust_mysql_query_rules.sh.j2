@@ -2,19 +2,19 @@
 
 #Author DBA R
 
-if [ $# -ne 1 ]
+#if [ $# -ne 1 ]
 
-then
+#then
 
-    echo "usage: `basename $0` [mysql_monitor_password]"
+#    echo "usage: `basename $0` [mysql_monitor_password]"
 
-    exit 1
+#    exit 1
 
-fi
+#fi
 
 #source /etc/profile
 
-export MYSQL_PWD=${1}
+#export MYSQL_PWD=${1}
 
 #向钉钉发送消息方法
 function SendMessageToDingding()
@@ -82,7 +82,7 @@ if [ ${offline_mysql_count} -gt 0 -o ${query_active} -ne 1 ] ; then
 
    then 
 
-   transactions_behind=`mysql -h${offline_mysql_server} -urepl -P{{ mysql_port }} -e "SELECT transactions_behind FROM sys.gr_member_routing_candidate_status\G;"\
+   transactions_behind=`mysql --login-path=${offline_mysql_server} -e "SELECT transactions_behind FROM sys.gr_member_routing_candidate_status\G;"\
  | grep transactions_behind: | awk '{ printf $2 }'`
 
    SendMessageToDingding "The number of backward transactions for ${offline_mysql_server} is ${transactions_behind}."

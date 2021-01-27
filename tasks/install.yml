@@ -49,12 +49,23 @@
     echo: yes
   no_log: True
 
+- name: Case sensitive password string match for logining mgr group
+  expect:
+    command: "mysql_config_editor set --login-path={{ hostvars[item]['inventory_hostname_short'] }} --host={{ hostvars[item]['inventory_hostname_short'] }} -P {{ mysql_port }} --user=repl --password"
+    responses:
+      (?i)password: "{{ mysql-monitor_password }}"
+      (?i)Continue: y
+    echo: yes
+  no_log: True
+  with_items: 
+    - "{{ groups.mgr_group }}"
+
 - name: Add the job of logrotate for proxysql
   cron:
     name: "logrotate"
     minute: "55"
     hour: "23"
-    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null"
+    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null 2>&1 &"
 
 - name: Install ProxySQL
   yum:
@@ -140,14 +151,21 @@
     config_layer: "RUNTIME"
   tags: manage_user
 
-- name: Add proxysql scheduler
-  proxysql_scheduler:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    active: 1
-    interval_ms: 3000
-    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
-    arg1: "{{ admin_login_password }}"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
+- name: Add the job of logrotate for monitor mgr
+  cron:
+    name: "logrotate"
+    minute: "*/1"
+    hour: "*"
+    job: "/var/lib/proxysql/auto_adjust_mysql_query_rules.sh > /dev/null 2>&1 &"
+
+#- name: Add proxysql scheduler
+#  proxysql_scheduler:
+#    login_user: 'admin'
+#   login_password: "{{ admin_login_password }}"
+#    active: 1
+#    interval_ms: 3000
+#    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+#    arg1: "{{ admin_login_password }}"
+#    state: present
+#    load_to_runtime: True
+#    save_to_disk: True
