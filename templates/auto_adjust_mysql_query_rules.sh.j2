@@ -2,19 +2,19 @@
 
 #Author DBA R
 
-#if [ $# -ne 1 ]
+if [ $# -ne 1 ]
 
-#then
+then
 
-#    echo "usage: `basename $0` [mysql_monitor_password]"
+    echo "usage: `basename $0` [admin_password]"
 
-#    exit 1
+    exit 1
 
-#fi
+fi
 
-#source /etc/profile
+source /etc/profile
 
-#export MYSQL_PWD=${1}
+export MYSQL_PWD=${1}
 
 #向钉钉发送消息方法
 function SendMessageToDingding()
@@ -33,59 +33,73 @@ function auto_adjust_mysql_query_rules() {
 
 c=2
 
-offline_mysql_count=`mysql --login-path=proxysql \
+offline_mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select count(distinct(a.srv_host)) as count_offline_mysql from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
-
-query_active=`mysql --login-path=proxysql \
+query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select active from mysql_query_rules where destination_hostgroup is not null and destination_hostgroup <> 10\G;"\
  | grep active: | awk '{ printf $2 }'`
 
-if [ ${offline_mysql_count} -gt 0 -o ${query_active} -ne 1 ] ; then
+if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
-   mysql_count=`mysql --login-path=proxysql \
+   mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select count(distinct(srv_host)) as count_mysql from stats_mysql_connection_pool\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
 
-   if [ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} -a ${query_active} -eq 1 ] ; then
+   if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 1 ]] ; then
 
-   SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
+   SendMessageToDingding "The slave2_172.17.15.96 will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
-   echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/abnormal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+   echo "The slave2_172.17.15.96 will adjust all read requests to the primary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/abnormal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
 
-   mysql --login-path=proxysql \
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=0 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
-      #else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} has adjusted all read requests to the primary."
+      #else echo "The slave2_172.17.15.96 has adjusted all read requests to the primary."
 
-   elif [ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} -a ${query_active} -ne 1 ] ; then
+   elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
 
-   SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+   SendMessageToDingding "The slave2_172.17.15.96 will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
 
-   echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
+   echo "The slave2_172.17.15.96 will adjust all read requests to the secondary because the number of offline MySQL is more than or equal to half!" > /var/lib/proxysql/normal_mysql_query_rules_`date +%Y%m%d%H%M%S`.log 
 
-   mysql --login-path=proxysql \
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=1 where destination_hostgroup is not null and destination_hostgroup <> 10;load mysql query rules to runtime;save mysql query rules to disk;"
 
-	   #else echo "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} has adjusted all read requests to the secondary."
+	   #else echo "The slave2_172.17.15.96 has adjusted all read requests to the secondary."
 
    else
 
-   mysql --login-path=proxysql\
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select * from runtime_mysql_servers;select * from stats_mysql_connection_pool;"
 
-   offline_mysql_server=`mysql --login-path=proxysql \
+   offline_mysql_server=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select distinct(a.srv_host) as offline_mysql_server from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
  | grep offline_mysql_server: | awk '{ printf $2 }'`
 
-   if [ -n ${offline_mysql_server} ]
+   if [[ -n ${offline_mysql_server} ]] && [[ $${offline_mysql_server} ]]
 
    then 
 
-   transactions_behind=`mysql --login-path=${offline_mysql_server} -e "SELECT transactions_behind FROM sys.gr_member_routing_candidate_status\G;"\
- | grep transactions_behind: | awk '{ printf $2 }'`
+   hostgroup_id=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select hostgroup as hostgroup_id from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
+ | grep hostgroup_id: | awk '{ printf $2 }'`
 
-   SendMessageToDingding "The number of backward transactions for ${offline_mysql_server} is ${transactions_behind}."
+   hostgroup_status=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select status as hostgroup_status from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
+ | grep hostgroup_status: | awk '{ printf $2 }'`
+
+   SendMessageToDingding "The hostgroup_id of ${offline_mysql_server} is ${hostgroup_id}.\n\
+The viable_status of ${offline_mysql_server} is ${hostgroup_status}.\n\
+Keep an eye for the cluster status!!!"
+
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "update scheduler set active=0 where id=1;LOAD SCHEDULER TO RUNTIME;SAVE SCHEDULER TO DISK;"     
+
+   sleep 300s
+
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "update scheduler set active=1 where id=1;LOAD SCHEDULER TO RUNTIME;SAVE SCHEDULER TO DISK;"
 
    fi
 
