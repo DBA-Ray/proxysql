@@ -151,21 +151,14 @@
     config_layer: "RUNTIME"
   tags: manage_user
 
-- name: Add the job of logrotate for monitor mgr
-  cron:
-    name: "logrotate"
-    minute: "*/1"
-    hour: "*"
-    job: "/var/lib/proxysql/auto_adjust_mysql_query_rules.sh > /dev/null 2>&1 &"
-
-#- name: Add proxysql scheduler
-#  proxysql_scheduler:
-#    login_user: 'admin'
-#   login_password: "{{ admin_login_password }}"
-#    active: 1
-#    interval_ms: 3000
-#    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
-#    arg1: "{{ admin_login_password }}"
-#    state: present
-#    load_to_runtime: True
-#    save_to_disk: True
+- name: Add proxysql scheduler
+  proxysql_scheduler:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    active: 1
+    interval_ms: 3000
+    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+    arg1: "{{ admin_login_password }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
