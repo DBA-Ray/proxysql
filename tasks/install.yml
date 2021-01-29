@@ -49,17 +49,6 @@
     echo: yes
   no_log: True
 
-- name: Case sensitive password string match for logining mgr group
-  expect:
-    command: "mysql_config_editor set --login-path={{ hostvars[item]['inventory_hostname_short'] }} --host={{ hostvars[item]['inventory_hostname_short'] }} -P {{ mysql_port }} --user=repl --password"
-    responses:
-      (?i)password: "{{ mysql-monitor_password }}"
-      (?i)Continue: y
-    echo: yes
-  no_log: True
-  with_items: 
-    - "{{ groups.mgr_group }}"
-
 - name: Add the job of logrotate for proxysql
   cron:
     name: "logrotate"

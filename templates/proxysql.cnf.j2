@@ -92,7 +92,7 @@ proxysql_servers =
 (
 {% for srv in groups.proxysql_pro1 %}
   {
-    hostname="{{ hostvars[srv]['ansible_default_ipv4']['address'] }}",
+    hostname="{{ hostvars[srv]['inventory_hostname_short'] }}",
     port=6032,
     weight=0,
     comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
