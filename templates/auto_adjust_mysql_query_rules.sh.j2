@@ -33,10 +33,11 @@ function auto_adjust_mysql_query_rules() {
 
 c=2
 
-offline_mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   offline_mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select count(distinct(a.srv_host)) as count_offline_mysql from stats_mysql_connection_pool a join mysql_group_replication_hostgroups b on a.hostgroup=b.offline_hostgroup\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
-query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   
+   query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select active from mysql_query_rules where destination_hostgroup is not null and destination_hostgroup <> 10\G;"\
  | grep active: | awk '{ printf $2 }'`
 
