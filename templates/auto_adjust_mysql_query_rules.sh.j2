@@ -102,6 +102,9 @@ Keep an eye for the cluster status!!!"
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update scheduler set active=1 where id=1;LOAD SCHEDULER TO RUNTIME;SAVE SCHEDULER TO DISK;"
 
+   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "select * from runtime_mysql_servers;select * from runtime_mysql_servers;"
+
    fi
 
    fi
