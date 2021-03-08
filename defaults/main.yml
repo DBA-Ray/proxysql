@@ -33,9 +33,9 @@ mysql_monitor_read_only_interval: 2000
 mysql_monitor_groupreplication_healthcheck_timeout: 7000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 6000
-mysql_server_version: '8.0.22'
+mysql_server_version: '8.0.23'
 mysql_max_allowed_packet: 1072693248
-mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+#mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
 # mysql servers变量
 mgr_group: mgr_pro1
