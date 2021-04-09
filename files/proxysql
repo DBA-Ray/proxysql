@@ -1,4 +1,4 @@
-/var/lib/proxysql/proxysql*.log {
+/var/lib/proxysql/proxysql.log {
 missingok
 daily
 dateext
@@ -8,6 +8,8 @@ delaycompress
 create 0600 proxysql proxysql
 rotate 7
 postrotate
+mysql --login-path=proxysql -e "PROXYSQL FLUSH LOGS;"
+sleep 7
 mysql --login-path=proxysql -e "PROXYSQL FLUSH LOGS;"
 endscript
 }
