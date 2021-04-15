@@ -3,7 +3,7 @@
   gather_facts: True
   remote_user: root
   vars:
-    proxysql: True # Whether to install proxysql
-    pmm_client: False # Whether to install pmm client
+    proxysql: False # Whether to install proxysql
+    whether_uninstall: False # Whether to uninstall the original service and then install it
   roles:
     - dba_ray.proxysql

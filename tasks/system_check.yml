@@ -9,11 +9,18 @@
     regexp: "^SELINUX="
     line: "SELINUX=disabled"
 
+- name: Proxysql status
+  systemd:
+    name: proxysql
+    state: started
+  register: result
+  when: whether_uninstall
+
 - name: Stop proxysql server
   systemd:
     name: proxysql
     state: stopped
-  when: whether_uninstall
+  when: whether_uninstall and result is succeeded
 
 - name: 备份原proxysql的db文件
   copy:
@@ -43,10 +50,10 @@
     name: "{{ packages }}"
     state: latest
 
-- name: Upgrade pip
-  pip:
-    name: pip
-    state: latest
+#- name: Upgrade pip
+#  pip:
+#    name: pip
+#    state: latest
 
 - name: Install pexpect
   pip:

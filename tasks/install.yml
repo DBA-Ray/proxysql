@@ -18,7 +18,7 @@
 
 - name: Install mysql client
   yum:
-    name: [mysql-community-common.x86_64, mysql-community-libs.x86_64, mysql-community-client.x86_64]
+    name: mysql-community-client.x86_64
     state: present
   register: result
   retries: 3
@@ -129,6 +129,21 @@
     - { username: 'root', password: "{{ root_password }}" }
     - { username: "{{ business_user }}", password: "{{ business_password }}" }
     - { username: 'audit', password: "{{ mysql_monitor_password }}" }
+
+- name: Add mysql_users
+  proxysql_mysql_users:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    username: "{{ item.username }}"
+    password: "{{ item.password }}"
+    default_hostgroup: 100
+    transaction_persistent: yes
+    max_connections: 10000
+    state: present
+    load_to_runtime: yes
+    save_to_disk: yes
+  with_items:
+    - { username: 'global', password: "{{ read_only_password }}" }
 
 - name: Encrypt mysql_users
   proxysql_manage_config:

@@ -9,8 +9,5 @@
 - include: install.yml
   when: proxysql | default(False)
 
-- include: install_tools.yml
-  when: pmm_client | default(False)
-
 - include: upgrade.yml
   when: is_upgrade | default(False)

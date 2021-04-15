@@ -77,25 +77,36 @@ mysql_variables=
 # defines all the MySQL servers
 mysql_servers =
 (
-{% for srv in groups.mgr_pro1 %}
+{% for srv in groups.all %}
   {
+    {% if ("mgr" in srv) %}
     address="{{ hostvars[srv]['inventory_hostname_short'] }}",
     port={{ mysql_port }},
     hostgroup={{ writer_hostgroup }},
     max_connections={{ max_connections }},
     compression=1
+    {% endif %}
+    {% if ("slave" in srv) %}
+    address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+    port={{ mysql_port }},
+    hostgroup=100,
+    max_connections={{ max_connections }},
+    compression=1
+    {% endif %}
   }{% if not loop.last %},{% endif %}
 {% endfor %}
 )
 
 proxysql_servers =
 (
-{% for srv in groups.proxysql_pro1 %}
+{% for srv in groups.all %}
   {
+    {% if ("proxysql" in srv) %}
     hostname="{{ hostvars[srv]['inventory_hostname_short'] }}",
     port=6032,
     weight=0,
     comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
+    {% endif %}
   }{% if not loop.last %},{% endif %}
 {% endfor %}
 )
@@ -145,6 +156,14 @@ mysql_query_rules:
   active=1
   match_digest="^select.*from"
   destination_hostgroup={{ reader_hostgroup }}
+  apply=0
+  cache_ttl={{ cache_ttl }}
+},
+{
+  rule_id=4
+  active=1
+  username="global"
+  destination_hostgroup=100
   apply=1
   cache_ttl={{ cache_ttl }}
 }
