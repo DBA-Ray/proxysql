@@ -39,6 +39,7 @@ mysql_wait_timeout: 28800000
 mgr_group: mgr_pro1
 mysql_port: 3377
 max_connections: 2000
+# proxysql_cluster_enabled: true # If the variable is defined,it will enable the proxysql cluster(default disabled)
 # 基于组复制架构的主机角色分配策略（传统复制也可以使用）
 writer_hostgroup: 10
 backup_writer_hostgroup: 20

@@ -99,6 +99,7 @@ mysql_servers =
 
 proxysql_servers =
 (
+{% if proxysql_cluster_enabled is defined %}
 {% for srv in groups.all %}
   {
     {% if ("proxysql" in srv) %}
@@ -109,6 +110,7 @@ proxysql_servers =
     {% endif %}
   }{% if not loop.last %},{% endif %}
 {% endfor %}
+{% endif %}
 )
 
 # defines all the MySQL users
