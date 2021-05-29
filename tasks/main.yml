@@ -1,13 +1,13 @@
 ---
 # tasks file for proxysql_ray
 - include: password.yml
-  when: proxysql | default(False)
+  when: not is_upgrade | default(False)
 
 - include: system_check.yml
-  when: proxysql | default(False)
+  when: not is_upgrade | default(False)
 
 - include: install.yml
-  when: proxysql | default(False)
+  when: not is_upgrade | default(False)
 
 - include: upgrade.yml
   when: is_upgrade | default(False)

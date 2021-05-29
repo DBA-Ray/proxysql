@@ -91,7 +91,7 @@
 - name: Wait for ProxySQL is running
   pause: seconds=3
 
-- name: Modify admin password
+- name: Modify admin password and cluster password
   proxysql_global_variables:
     login_user: 'admin'
     login_password: 'admin'
@@ -112,6 +112,7 @@
     save_to_disk: True
   with_items:
     - { variable: 'mysql-monitor_password', value: "{{ mysql_monitor_password }}" }
+    - { variable: 'admin-cluster_password', value: "{{ mysql_monitor_password }}" }
 
 - name: Add mysql_users
   proxysql_mysql_users:
@@ -130,7 +131,7 @@
     - { username: "{{ business_user }}", password: "{{ business_password }}" }
     - { username: 'audit', password: "{{ mysql_monitor_password }}" }
 
-- name: Add mysql_users
+- name: Add mysql_users(read_only)
   proxysql_mysql_users:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
@@ -162,7 +163,6 @@
     active: 1
     interval_ms: 3000
     filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
-    arg1: "{{ admin_login_password }}"
     state: present
     load_to_runtime: True
     save_to_disk: True

@@ -42,7 +42,6 @@ admin_variables=
 mysql_ifaces="{{ admin_mysql_ifaces }}"
         stats_mysql_query_digest_to_disk=0
         cluster_username="repl"
-        cluster_password="{{ mysql_monitor_password }}"
         cluster_mysql_query_rules_diffs_before_sync=1
         cluster_mysql_servers_diffs_before_sync=1
         cluster_mysql_users_diffs_before_sync=1
@@ -53,7 +52,7 @@ mysql_variables=
 {
         interfaces="{{ mysql_interfaces }}"
         shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
-        threads={{ mysql_threads }}
+        threads={{ ansible_processor_vcpus }}
         query_cache_size_MB={{ mysql_query_cache_size_MB }}
         threshold_resultset_size ={{ mysql_threshold_resultset_size }}
         monitor_username="{{ mysql_monitor_username }}"
@@ -69,7 +68,7 @@ mysql_variables=
         log_unhealthy_connections="false"
         query_digests_lowercase="true"
         query_digests_normalize_digest_text="true"
-        query_digests_track_hostname="false"
+        query_digests_track_hostname="true"
         default_collation_connection="utf8mb4_0900_ai_ci"
 }
 
@@ -77,15 +76,25 @@ mysql_variables=
 # defines all the MySQL servers
 mysql_servers =
 (
-{% for srv in groups.all %}
+{% for srv in groups.mgr_pro1 %}
   {
-    {% if ("mgr" in srv) %}
-    address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+    {% if ("mgr1" in srv) %}
+    address="mgr1",
     port={{ mysql_port }},
     hostgroup={{ writer_hostgroup }},
     max_connections={{ max_connections }},
     compression=1
+    {% else %}
+    address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+    port={{ mysql_port }},
+    hostgroup={{ reader_hostgroup }},
+    max_connections={{ max_connections }},
+    compression=1    
     {% endif %}
+  }{% if not loop.last %},{% endif %}
+{% endfor %},
+{% for srv in groups.slave_monitor %}
+  {
     {% if ("slave" in srv) %}
     address="{{ hostvars[srv]['inventory_hostname_short'] }}",
     port={{ mysql_port }},
