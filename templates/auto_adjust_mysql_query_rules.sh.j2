@@ -39,20 +39,20 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
    if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 1 ]] ; then
 
-   SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
+   SendMessageToDingding "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "select * from runtime_mysql_servers;" > /var/lib/proxysql/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
    elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
 
-   SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+   SendMessageToDingding "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "select * from runtime_mysql_servers;" > /var/lib/proxysql/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_query_rules set active=1 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
@@ -60,9 +60,9 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
    elif [[ ${offline_mysql_count} == ${mysql_count} ]] ; then
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "select * from runtime_mysql_servers;" > /var/lib/proxysql/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
-   SendMessageToDingding "The {{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
+   SendMessageToDingding "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "delete from mysql_group_replication_hostgroups;load mysql servers to runtime;save mysql servers to disk;"
@@ -76,7 +76,7 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
    else 
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "select * from runtime_mysql_servers;" > /var/lib/proxysql/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
    fi
 

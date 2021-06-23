@@ -1,4 +1,4 @@
-/var/lib/proxysql/proxysql.log {
+{{ datadir }}/proxysql.log {
 missingok
 daily
 dateext

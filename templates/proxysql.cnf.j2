@@ -31,8 +31,11 @@
 #
 ########################################################################################
 
-datadir="/var/lib/proxysql"
-errorlog="/var/lib/proxysql/proxysql.log"
+#datadir="/var/lib/proxysql"
+#errorlog="/var/lib/proxysql/proxysql.log"
+
+datadir="{{ datadir }}"
+errorlog="{{ datadir }}/proxysql.log"
 
 admin_variables=
 {
@@ -70,16 +73,20 @@ mysql_variables=
         query_digests_normalize_digest_text="true"
         query_digests_track_hostname="true"
         default_collation_connection="utf8mb4_0900_ai_ci"
+        eventslog_filesize=268435456
+        eventslog_default_log=1
+        eventslog_format=2
+        eventslog_filename="{{ eventslog_dir }}/events_log"
 }
 
 
 # defines all the MySQL servers
 mysql_servers =
 (
-{% for srv in groups.mgr_pro1 %}
+{% for srv in groups.mgr_testa %}
   {
-    {% if ("mgr1" in srv) %}
-    address="mgr1",
+    {% if ("mgr1_{{ env }}" in srv) %}
+    address="mgr1_{{ env }}",
     port={{ mysql_port }},
     hostgroup={{ writer_hostgroup }},
     max_connections={{ max_connections }},
@@ -93,7 +100,7 @@ mysql_servers =
     {% endif %}
   }{% if not loop.last %},{% endif %}
 {% endfor %},
-{% for srv in groups.slave_monitor %}
+{% for srv in groups.slave_monitor_testa %}
   {
     {% if ("slave" in srv) %}
     address="{{ hostvars[srv]['inventory_hostname_short'] }}",
@@ -177,6 +184,13 @@ mysql_query_rules:
   destination_hostgroup=100
   apply=1
   cache_ttl={{ cache_ttl }}
+},
+{
+  rule_id=100
+  active=1
+  match_digest="."
+  log=1
+  apply=0
 }
 )
 

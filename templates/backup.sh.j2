@@ -1,0 +1,49 @@
+#!/bin/bash
+
+#Author DBA R
+
+source /etc/profile
+
+export MYSQL_PWD="{{ admin_login_password }}"
+
+backupdir={{ backupdir }}
+
+hostname={{ ansible_hostname }}
+
+delete_time=`date  "+%Y%m%d" -d "-29 days"`
+
+eventslog_dir={{ eventslog_dir }}
+
+function backup() {
+
+#Save query digest to disk
+
+mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "set admin-stats_mysql_query_digest_to_disk=1;LOAD ADMIN VARIABLES TO RUNTIME;"
+
+sleep 7
+
+mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+-e "set admin-stats_mysql_query_digest_to_disk=0;LOAD ADMIN VARIABLES TO RUNTIME;SAVE ADMIN VARIABLES TO DISK;"
+
+mysqldump -u admin -h 127.0.0.1 -P6032 --no-tablespaces --skip-triggers --skip-column-statistics --single-transaction -B main > ${backupdir}/${hostname}_`date "+%Y%m%d_%H%M%S"`.sql
+
+find ${backupdir}/ -name "${hostname}_${delete_time}*" -exec rm -rf {} \;
+
+}
+
+function compress_logs () {
+
+ls -lt ${eventslog_dir}/events_log.*| grep ^[^d] |grep -v '.zst'| awk '{if (NR>1)print $9}' | while read filename
+
+do
+
+zstd -T0 -v --rm ${filename}
+
+done
+
+}
+
+backup
+
+compress_logs

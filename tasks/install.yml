@@ -1,12 +1,19 @@
 # 安装proxysql并初始化
 
+- name: Create directories for proxysql
+  file: path={{ item }} state=directory owner=proxysql group=proxysql
+  with_items:
+    - "{{ datadir }}"
+    - "{{ package_dir }}"
+    - "{{ eventslog_dir }}"
+    - "{{ backupdir }}"
+
 - name: Copy the installation package,mysql source and logrotate script
   copy:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   with_items:
     - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
-    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
 
 - name: Install mysql resource
   yum:
@@ -61,7 +68,18 @@
     name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
 
-- name: Rendering proxysql profile
+- name: Rendering scheudler file
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: proxysql
+    group: proxysql
+    mode: 0774
+  with_items:
+    - { src: 'auto_adjust_mysql_query_rules.sh.j2', dest: "{{ datadir }}/auto_adjust_mysql_query_rules.sh" }
+    - { src: 'backup.sh.j2', dest: "{{ datadir }}/backup.sh" }
+
+- name: Rendering proxysql profile,logrotate file
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -69,6 +87,17 @@
     group: proxysql
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
+    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
+
+- name: Modify proxysql.service file
+  lineinfile:
+    dest: /etc/systemd/system/proxysql.service
+    regexp: "PIDFile=/var/lib/proxysql/proxysql.pid"
+    line: "PIDFile={{ datadir }}/proxysql.pid"
+
+- name: Daemon reload proxysql server
+  systemd:
+    daemon_reload: yes    
 
 - name: Enable proxysql server
   systemd:
@@ -79,14 +108,6 @@
   systemd:
     name: proxysql
     state: started
-
-- name: Rendering auto_adjust_mysql_query_rules.sh
-  template:
-    src: auto_adjust_mysql_query_rules.sh.j2
-    dest: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
-    owner: proxysql
-    group: proxysql
-    mode: 0774
 
 - name: Wait for ProxySQL is running
   pause: seconds=3
@@ -156,13 +177,24 @@
     config_layer: "RUNTIME"
   tags: manage_user
 
-- name: Add proxysql scheduler
+- name: Add proxysql scheduler for auto adjust query rules
   proxysql_scheduler:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
     active: 1
     interval_ms: 3000
-    filename: /var/lib/proxysql/auto_adjust_mysql_query_rules.sh
+    filename: "{{ datadir }}/auto_adjust_mysql_query_rules.sh"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
+
+- name: Add proxysql scheduler for backup
+  proxysql_scheduler:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    active: 1
+    interval_ms: 28800000
+    filename: "{{ datadir }}/backup.sh"
     state: present
     load_to_runtime: True
     save_to_disk: True

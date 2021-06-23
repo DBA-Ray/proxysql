@@ -41,7 +41,7 @@
 
 - name: Remove proxysql directory
   file:
-    path: /var/lib/proxysql
+    path: "{{ datadir }}"
     state: absent
   when: whether_uninstall
 

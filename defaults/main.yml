@@ -1,17 +1,24 @@
 ---
 # defaults file for proxysql_ray
+env: testa
 # Which hosts to deploy
-deploy_hosts: proxysql_pro1
+deploy_hosts: "proxysql_{{ env }}"
+# Which mgr group to route
+mgr_group: "mgr_{{ env }}"
 # 默认启用基于组复制架构的主机角色分配策略
 proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
 proxysql_replication_hostgroups: False
 # Repo info
 remote_repo: https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm
 # 目录路径
-package_dir: /var/local
+datadir: /data/proxysql
+errorlog: "{{ datadir }}/proxysql.log"
+package_dir: /data/package
+backupdir: /data/backup
+eventslog_dir: /data/events_log
 proxysql_package: proxysql-2.0.18-1-centos7.x86_64.rpm
-db_file: /var/lib/proxysql/proxysql.db
-db_stats_file: /var/lib/proxysql/proxysql_stats.db
+db_file: "{{ datadir }}/proxysql.db"
+db_stats_file: "{{ datadir }}/proxysql_stats.db"
 proxysql_upgrade_package: proxysql-2.0.18-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
@@ -35,7 +42,6 @@ mysql_max_allowed_packet: 1072693248
 #mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
 # mysql servers变量
-mgr_group: mgr_pro1
 mysql_port: 3377
 max_connections: 2000
 # proxysql_cluster_enabled: true # If the variable is defined,it will enable the proxysql cluster(default disabled)
