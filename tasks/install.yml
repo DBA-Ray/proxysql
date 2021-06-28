@@ -1,4 +1,13 @@
 # 安装proxysql并初始化
+- name: Ensure group "proxysql" exists
+  group:
+    name: proxysql
+    state: present
+
+- name: Ensure the user "proxysql" exists
+  user:
+    name: proxysql
+    group: proxysql
 
 - name: Create directories for proxysql
   file: path={{ item }} state=directory owner=proxysql group=proxysql
@@ -88,6 +97,14 @@
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
     - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
+
+- name: Modify proxysql.cnf file
+  replace:
+    path: /etc/proxysql.cnf
+    regexp: 'testa'
+    replace: "{{ env }}"
+    owner: proxysql
+    group: proxysql
 
 - name: Modify proxysql.service file
   lineinfile:
