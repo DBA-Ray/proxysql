@@ -1,14 +1,5 @@
 # 系统环境检测，排除干扰
 
-- name: 关闭firewalld
-  service: name=firewalld state=stopped enabled=no
-
-- name: 永久关闭selinux
-  lineinfile:
-    dest: /etc/selinux/config
-    regexp: "^SELINUX="
-    line: "SELINUX=disabled"
-
 - name: Proxysql status
   systemd:
     name: proxysql
@@ -33,9 +24,9 @@
     backup: no
   when: whether_uninstall
 
-- name: 卸载系统自带的mariadb和已经安装的proxysql
+- name: 卸载已经安装的proxysql
   yum:
-    name: [mariadb, proxysql]
+    name: proxysql
     state: absent
   when: whether_uninstall
 
