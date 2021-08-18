@@ -30,10 +30,13 @@
     state: absent
   when: whether_uninstall
 
-- name: Remove proxysql directory
+- name: Remove proxysql config file and proxysql directory
   file:
-    path: "{{ datadir }}"
+    path: "{{ item }}"
     state: absent
+  with_items:
+    - /etc/proxysql.cnf
+    - "{{ datadir }}"
   when: whether_uninstall
 
 - name: 安装基础软件包

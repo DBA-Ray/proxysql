@@ -194,6 +194,32 @@
     config_layer: "RUNTIME"
   tags: manage_user
 
+- name: Delete the reader hostgroup id of primary host
+  proxysql_backend_servers:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    hostname: "{{ primary_host }}"
+    hostgroup_id: "{{ reader_hostgroup }}"
+    max_connections: "{{ max_connections }}"
+    compression: 1
+    port: "{{ mysql_port }}"
+    state: absent
+    load_to_runtime: True
+    save_to_disk: True  
+
+- name: Add the writer hostgroup id of primary host
+  proxysql_backend_servers:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    hostname: "{{ primary_host }}"
+    hostgroup_id: "{{ writer_hostgroup }}"
+    max_connections: "{{ max_connections }}"
+    compression: 1
+    port: "{{ mysql_port }}"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True  
+
 - name: Add proxysql scheduler for auto adjust query rules
   proxysql_scheduler:
     login_user: 'admin'
