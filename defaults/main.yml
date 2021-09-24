@@ -1,8 +1,8 @@
 ---
 # defaults file for proxysql_ray
-env: pro2
+env: pro1
 # Which hosts to deploy
-deploy_hosts: "proxysql2"
+deploy_hosts: "proxysql_{{ env }}"
 # Which hosts to route
 primary_host: "mgr1_{{ env }}"
 mgr_group: "mgr_{{ env }}"
@@ -28,6 +28,7 @@ admin_web_enabled: 'false'
 admin_login_port: 6032
 admin_mysql_ifaces: "0.0.0.0:{{ admin_login_port }}"
 # mysql变量
+mysql_threads: 16
 mysql_interfaces: '0.0.0.0:3377'
 mysql_shun_recovery_time_sec: 7
 mysql_query_cache_size_MB: 1024

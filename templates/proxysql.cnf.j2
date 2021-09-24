@@ -55,7 +55,7 @@ mysql_variables=
 {
         interfaces="{{ mysql_interfaces }}"
         shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
-        threads={{ ansible_processor_vcpus }}
+        threads={{ mysql_threads }}
         query_cache_size_MB={{ mysql_query_cache_size_MB }}
         threshold_resultset_size ={{ mysql_threshold_resultset_size }}
         monitor_username="{{ mysql_monitor_username }}"
@@ -74,7 +74,7 @@ mysql_variables=
         query_digests_track_hostname="true"
         default_collation_connection="utf8mb4_0900_ai_ci"
         eventslog_filesize=268435456
-        eventslog_default_log=0
+        eventslog_default_log=1
         eventslog_format=2
         eventslog_filename="{{ eventslog_dir }}/events_log"
         autocommit_false_is_transaction="true"
@@ -183,7 +183,7 @@ mysql_query_rules:
 },
 {
   rule_id=100
-  active=1
+  active=0
   match_digest="."
   log=1
   apply=0

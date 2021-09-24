@@ -98,13 +98,13 @@
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
     - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
 
-- name: Modify proxysql.cnf file
-  replace:
-    path: /etc/proxysql.cnf
-    regexp: 'testa'
-    replace: "{{ env }}"
-    owner: proxysql
-    group: proxysql
+#- name: Modify proxysql.cnf file
+#  replace:
+#    path: /etc/proxysql.cnf
+#    regexp: 'testa'
+#    replace: "{{ env }}"
+#    owner: proxysql
+#    group: proxysql
 
 - name: Modify proxysql.service file
   lineinfile:
