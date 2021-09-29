@@ -26,7 +26,7 @@ sleep 7
 mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "set admin-stats_mysql_query_digest_to_disk=0;LOAD ADMIN VARIABLES TO RUNTIME;SAVE ADMIN VARIABLES TO DISK;"
 
-mysqldump -u admin -h 127.0.0.1 -P6032 --no-tablespaces --skip-triggers --skip-column-statistics --single-transaction -B main > ${backupdir}/${hostname}_`date "+%Y%m%d_%H%M%S"`.sql
+mysqldump -u admin -h 127.0.0.1 -P6032 --no-tablespaces --skip-triggers --single-transaction -B main > ${backupdir}/${hostname}_`date "+%Y%m%d_%H%M%S"`.sql
 
 find ${backupdir}/ -name "${hostname}_${delete_time}*" -exec rm -rf {} \;
 
