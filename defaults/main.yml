@@ -3,6 +3,7 @@
 env: pro1
 # Which hosts to deploy
 deploy_hosts: "proxysql_{{ env }}"
+Dingding_Url: "https://oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509" 
 # Which hosts to route
 primary_host: "mgr1_{{ env }}"
 mgr_group: "mgr_{{ env }}"

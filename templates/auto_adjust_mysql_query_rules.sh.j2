@@ -9,7 +9,7 @@ export MYSQL_PWD="{{ admin_login_password }}"
 #向钉钉发送消息方法
 function SendMessageToDingding()
 { # 发送钉钉消息
-Dingding_Url="https://oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509" 
+Dingding_Url="{{ Dingding_Url }}" 
 curl "${Dingding_Url}" -H 'Content-Type: application/json' -d "
  { \"msgtype\":\"text\",
 \"text\":{
@@ -68,10 +68,10 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 -e "update mysql_group_replication_hostgroups set active=0;load mysql servers to runtime;save mysql servers to disk;"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"
+-e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
+-e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"
 
    else 
 
