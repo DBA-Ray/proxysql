@@ -41,7 +41,7 @@ mysql_monitor_read_only_interval: 1000
 mysql_monitor_groupreplication_healthcheck_timeout: 1000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 6000
-mysql_server_version: '8.0.26'
+mysql_server_version: '8.0.27'
 mysql_max_allowed_packet: 1072693248
 #mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
@@ -58,7 +58,7 @@ group_replication_active: 1
 writer_is_also_reader: 0
 max_transactions_behind: 30000
 # mysql users变量
-business_user: ttjb
+business_user: example
 # mysql query rules变量
 cache_ttl: 1
 # 如果定义navicat_query_rule，则表示添加适配navicat的路由规则
