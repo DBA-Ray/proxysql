@@ -19,10 +19,10 @@ errorlog: "{{ datadir }}/proxysql.log"
 package_dir: /data/package
 backupdir: /data/backup
 eventslog_dir: /data/events_log
-proxysql_package: proxysql-2.0.18-1-centos7.x86_64.rpm
+proxysql_package: proxysql-2.3.2-1-centos7.x86_64.rpm
 db_file: "{{ datadir }}/proxysql.db"
 db_stats_file: "{{ datadir }}/proxysql_stats.db"
-proxysql_upgrade_package: proxysql-2.0.18-1-centos7.x86_64.rpm
+proxysql_upgrade_package: proxysql-2.3.2-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'false'
