@@ -3,7 +3,10 @@
 env: pro1
 # Which hosts to deploy
 deploy_hosts: "proxysql_{{ env }}"
-Dingding_Url: "https://oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509" 
+# Monitor info
+message_type: weixin
+dingding_url: "oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
+weixin_url: "qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
 # Which hosts to route
 primary_host: "mgr1_{{ env }}"
 mgr_group: "mgr_{{ env }}"
@@ -41,7 +44,7 @@ mysql_monitor_read_only_interval: 1000
 mysql_monitor_groupreplication_healthcheck_timeout: 1000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 6000
-mysql_server_version: '8.0.27'
+mysql_server_version: '8.0.28'
 mysql_max_allowed_packet: 1072693248
 #mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000

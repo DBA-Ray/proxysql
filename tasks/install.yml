@@ -24,22 +24,6 @@
   with_items:
     - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
 
-- name: Install mysql resource
-  yum:
-    name: "{{ remote_repo }}"
-    state: present
-
-- name: Copy the mysql-community.repo
-  copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
-
-- name: Install mysql client
-  yum:
-    name: mysql-community-client.x86_64
-    state: present
-  register: result
-  retries: 3
-  until: result is succeeded
-
 - name: Rendering mysql_config_editor.sh
   template:
     src: mysql_config_editor.sh.j2
@@ -50,11 +34,6 @@
 
 #- name: Case sensitive password string match for logining proxysql
 #  shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
-
-- name: Remove mysql_config_editor.sh
-  file:
-    path: "{{ package_dir }}/mysql_config_editor.sh"
-    state: absent
 
 - name: Case sensitive password string match for logining proxysql
   expect:
@@ -88,7 +67,7 @@
     - { src: 'auto_adjust_mysql_query_rules.sh.j2', dest: "{{ datadir }}/auto_adjust_mysql_query_rules.sh" }
     - { src: 'backup.sh.j2', dest: "{{ datadir }}/backup.sh" }
 
-- name: Rendering proxysql profile,logrotate file
+- name: Rendering proxysql profile
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -96,15 +75,15 @@
     group: proxysql
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
-    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
 
-#- name: Modify proxysql.cnf file
-#  replace:
-#    path: /etc/proxysql.cnf
-#    regexp: 'testa'
-#    replace: "{{ env }}"
-#    owner: proxysql
-#    group: proxysql
+- name: Rendering logrotate file
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
 
 - name: Modify proxysql.service file
   lineinfile:

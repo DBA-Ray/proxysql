@@ -14,17 +14,57 @@ delete_time=`date  "+%Y%m%d" -d "-29 days"`
 
 eventslog_dir={{ eventslog_dir }}
 
+## 发送消息方法
+function SendMessage()
+
+{
+
+dingding_url="https://{{ dingding_url }}"
+
 #向钉钉发送消息方法
 function SendMessageToDingding()
-{ # 发送钉钉消息
-Dingding_Url="{{ Dingding_Url }}" 
-curl "${Dingding_Url}" -H 'Content-Type: application/json' -d "
+{ 
+curl "${dingding_url}" -H 'Content-Type: application/json' -d "
  { \"msgtype\":\"text\",
 \"text\":{
 \"content\":\"${1}\"},
 \"at\":{
 \"atMobiles\":[\"15668661298\"],
 \"isAtAll\":false} }"
+}
+
+weixin_url="https://{{ weixin_url }}"
+
+#向微信发送消息方法
+function SendMessageToWeixin()
+{
+cat > sendweb.sh<< EOF
+    curl "${weixin_url}" \
+   -H 'Content-Type: application/json' \
+   -d '
+   {
+        "msgtype": "text",
+        "text": {
+            "content": "${1}",
+            "mentioned_mobile_list":["15668661298"]
+        }
+   }'
+EOF
+sh sendweb.sh && rm -rf sendweb.sh
+}
+
+if [ ${1} == "dingding" ]
+
+then SendMessageToDingding "${2}"
+
+elif [ ${1} == "weixin" ]
+
+then SendMessageToWeixin "${2}"
+
+else echo "未设置发送消息方式"
+
+fi
+
 }
 
 function backup() {
@@ -51,7 +91,7 @@ if [ $? -eq 0 ];then
     echo "The Proxysql BackUp Successfully!"
 else
     echo "The Proxysql BackUp Failure!"
-    SendMessageToDingding "The Proxysql {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} BackUp Failure!"
+    SendMessage "The Proxysql {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} BackUp Failure!"
 fi
 
 }

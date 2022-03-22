@@ -5,13 +5,13 @@
     name: proxysql
     state: started
   register: result
-  when: whether_uninstall
+  when: whether_uninstall | default(False)
 
 - name: Stop proxysql server
   systemd:
     name: proxysql
     state: stopped
-  when: whether_uninstall and result is succeeded
+  when: whether_uninstall | default(False) and result is succeeded
 
 - name: 备份原proxysql的db文件
   copy:
@@ -22,13 +22,13 @@
     group: proxysql
     mode: '0644'
     backup: no
-  when: whether_uninstall
+  when: whether_uninstall | default(False)
 
 - name: 卸载已经安装的proxysql
   yum:
     name: proxysql
     state: absent
-  when: whether_uninstall
+  when: whether_uninstall | default(False)
 
 - name: Remove proxysql config file and proxysql directory
   file:
@@ -37,23 +37,25 @@
   with_items:
     - /etc/proxysql.cnf
     - "{{ datadir }}"
-  when: whether_uninstall
+  when: whether_uninstall | default(False)
+
+- name: Copy the mysql-community.repo
+  copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
+
+- name: Install mysql client
+  yum:
+    name: mysql-community-client.x86_64
+    state: present
+  register: result
+  retries: 3
+  until: result is succeeded
 
 - name: 安装基础软件包
   yum:
     name: "{{ packages }}"
     state: latest
 
-#- name: Upgrade pip
-#  pip:
-#    name: pip
-#    state: latest
-
 - name: Install pexpect
   pip:
     name: pexpect
     state: latest
-#- name: 更新所有软件包
-#  yum:
-#    name: '*'
-#    state: latest
