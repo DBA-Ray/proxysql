@@ -1,6 +1,6 @@
 ---
 # defaults file for proxysql_ray
-env: pro1
+env: dev1
 # Which hosts to deploy
 deploy_hosts: "proxysql_{{ env }}"
 # Monitor info
@@ -61,7 +61,7 @@ group_replication_active: 1
 writer_is_also_reader: 0
 max_transactions_behind: 30000
 # mysql users变量
-business_user: example
+business_user: hlzd
 # mysql query rules变量
 cache_ttl: 1
 # 如果定义navicat_query_rule，则表示添加适配navicat的路由规则

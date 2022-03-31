@@ -3,6 +3,6 @@
   gather_facts: True
   remote_user: root
   vars:
-    whether_uninstall: False # Whether to uninstall the original service and then install it
+    whether_uninstall: True # Whether to uninstall the original service and then install it
   roles:
     - dba_ray.proxysql
