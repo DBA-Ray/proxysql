@@ -79,7 +79,7 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
    if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 1 ]] ; then
 
-   SendMessage "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
+   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
@@ -89,7 +89,7 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
    elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
 
-   SendMessage "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
@@ -102,7 +102,7 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
-   SendMessage "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
+   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
 
    mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
 -e "update mysql_group_replication_hostgroups set active=0;load mysql servers to runtime;save mysql servers to disk;"

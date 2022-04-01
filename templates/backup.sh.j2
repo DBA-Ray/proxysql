@@ -91,7 +91,7 @@ if [ $? -eq 0 ];then
     echo "The Proxysql BackUp Successfully!"
 else
     echo "The Proxysql BackUp Failure!"
-    SendMessage "The Proxysql {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} BackUp Failure!"
+    SendMessage "{{ message_type }}" "The Proxysql {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} BackUp Failure!"
 fi
 
 }
