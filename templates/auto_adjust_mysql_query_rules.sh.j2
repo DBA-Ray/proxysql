@@ -1,10 +1,12 @@
 #!/bin/bash
 
-#Author DBA R
+#Author DBA Ray
 
 source /etc/profile
 
 export MYSQL_PWD="{{ admin_login_password }}"
+
+proxysql_cmd=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password`
 
 ## 发送消息方法
 function SendMessage()
@@ -21,7 +23,7 @@ curl "${dingding_url}" -H 'Content-Type: application/json' -d "
 \"text\":{
 \"content\":\"${1}\"},
 \"at\":{
-\"atMobiles\":[\"15668661298\"],
+\"atMobiles\":[\"{{ mobile }}\"],
 \"isAtAll\":false} }"
 }
 
@@ -38,7 +40,7 @@ cat > sendweb.sh<< EOF
         "msgtype": "text",
         "text": {
             "content": "${1}",
-            "mentioned_mobile_list":["15668661298"]
+            "mentioned_mobile_list":["{{ mobile }}"]
         }
    }'
 EOF
@@ -63,17 +65,17 @@ function auto_adjust_mysql_query_rules() {
 
 c=2
 
-offline_mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+offline_mysql_count=`${proxysql_cmd} \
 -e "select count(distinct(a.hostname)) as count_offline_mysql from runtime_mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.offline_hostgroup\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
 
-query_active=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+query_active=`${proxysql_cmd} \
 -e "select active from mysql_query_rules where match_digest='^select.*from'\G;"\
  | grep active: | awk '{ printf $2 }'`
 
 if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
-   mysql_count=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   mysql_count=`${proxysql_cmd} \
 -e "select count(distinct(hostname)) as count_mysql from mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
 
@@ -81,41 +83,38 @@ if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
    elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "update mysql_query_rules set active=1 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
    elif [[ ${offline_mysql_count} == ${mysql_count} ]] ; then
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "update mysql_group_replication_hostgroups set active=0;load mysql servers to runtime;save mysql servers to disk;"
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
-
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"
 
    else 
 
-   mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
+   ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
    fi

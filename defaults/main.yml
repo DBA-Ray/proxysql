@@ -7,6 +7,7 @@ deploy_hosts: "proxysql_{{ env }}"
 message_type: weixin
 dingding_url: "oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
 weixin_url: "qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
+mobile: 15668661298
 # Which hosts to route
 primary_host: "mgr1_{{ env }}"
 mgr_group: "mgr_{{ env }}"
