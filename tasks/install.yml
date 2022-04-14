@@ -46,7 +46,7 @@
 
 - name: Add the job of logrotate for proxysql
   cron:
-    name: "logrotate"
+    name: "proxysql logrotate"
     minute: "55"
     hour: "23"
     job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null 2>&1 &"
