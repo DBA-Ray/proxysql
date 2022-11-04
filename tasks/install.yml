@@ -66,6 +66,21 @@
   with_items:
     - { src: 'auto_adjust_mysql_query_rules.sh.j2', dest: "{{ datadir }}/auto_adjust_mysql_query_rules.sh" }
     - { src: 'backup.sh.j2', dest: "{{ datadir }}/backup.sh" }
+    - { src: 'send_error_log.sh.j2', dest: "{{ datadir }}/send_error_log.sh" }
+
+- name: Add the job of sending error log for proxysql
+  cron:
+    name: "proxysql send log in the morning"
+    minute: "55"
+    hour: "08"
+    job: "{{ datadir }}/send_error_log.sh > /dev/null 2>&1 &"
+
+- name: Add the job of sending error log for proxysql
+  cron:
+    name: "proxysql send log in the afternoon"
+    minute: "55"
+    hour: "16"
+    job: "{{ datadir }}/send_error_log.sh > /dev/null 2>&1 &"
 
 - name: Rendering proxysql profile
   template:

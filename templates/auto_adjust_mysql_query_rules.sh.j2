@@ -6,7 +6,7 @@ source /etc/profile
 
 export MYSQL_PWD="{{ admin_login_password }}"
 
-proxysql_cmd=`mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password`
+proxysql_cmd="mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password"
 
 ## 发送消息方法
 function SendMessage()
@@ -65,57 +65,73 @@ function auto_adjust_mysql_query_rules() {
 
 c=2
 
+#查询离线节点总数
 offline_mysql_count=`${proxysql_cmd} \
--e "select count(distinct(a.hostname)) as count_offline_mysql from runtime_mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.offline_hostgroup\G;"\
+-e "select count(distinct(a.hostname)) as count_offline_mysql from runtime_mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.offline_hostgroup or a.hostgroup_id=b.backup_writer_hostgroup or (a.status <> 'ONLINE' and (a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup))\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
 
+#查询读路由是否启用
 query_active=`${proxysql_cmd} \
 -e "select active from mysql_query_rules where match_digest='^select.*from'\G;"\
  | grep active: | awk '{ printf $2 }'`
 
+#如果离线节点总数大于0或者读路由没有启用,那么认为不正常
 if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
 
+   #查询节点总数
    mysql_count=`${proxysql_cmd} \
 -e "select count(distinct(hostname)) as count_mysql from mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
-
+   
+   #如果离线节点的总数乘以2大于节点总数并且读路由启用了
    if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 1 ]] ; then
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
    ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
-
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/primary_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
+   
+   #调整所有读请求到主节点
    ${proxysql_cmd} \
 -e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
+   #如果离线节点的总数乘以2小于节点总数并且读路由禁用了
    elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
-
+   
    ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
+   #调整所有读请求到副节点
    ${proxysql_cmd} \
 -e "update mysql_query_rules set active=1 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
+   #如果离线节点总数等于节点总数
    elif [[ ${offline_mysql_count} == ${mysql_count} ]] ; then
 
    ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/discard_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
    SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
 
+   #禁用调度工作
+   ${proxysql_cmd} \
+-e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"   
+
+   #禁用组复制状态监控,让所有节点恢复到初始角色
    ${proxysql_cmd} \
 -e "update mysql_group_replication_hostgroups set active=0;load mysql servers to runtime;save mysql servers to disk;"
 
+   #禁用读路由,保持数据一致性
    ${proxysql_cmd} \
--e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"
+-e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
 
    else 
 
+   #其他情况比如离线节点没有过半数并且读路由是启用的状态,读取当前节点状态记录
    ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
+-e "select * from runtime_mysql_servers;" > {{ datadir }}/other_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
 
    fi
 

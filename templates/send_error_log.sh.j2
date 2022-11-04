@@ -1,0 +1,12 @@
+#!/bin/sh
+#Author DBA R
+
+monitordir={{ monitordir }}
+
+dailyfile={{ ansible_hostname }}_`date +%Y%m%d%H%M%S`.txt
+
+grep -i error {{ errorlog }} > /tmp/${dailyfile}
+
+scp_port={{ scp_port }}
+
+scp -P ${scp_port} /tmp/${dailyfile} root@{{ send_host }}:${monitordir}/{{ ansible_hostname }}.txt
