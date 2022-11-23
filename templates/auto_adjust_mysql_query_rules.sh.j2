@@ -70,42 +70,42 @@ offline_mysql_count=`${proxysql_cmd} \
 -e "select count(distinct(a.hostname)) as count_offline_mysql from runtime_mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.offline_hostgroup or a.hostgroup_id=b.backup_writer_hostgroup or (a.status <> 'ONLINE' and (a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup))\G;"\
  | grep count_offline_mysql: | awk '{ printf $2 }'`
 
-#查询读路由是否启用
+#查询主节点可读是否启用
 query_active=`${proxysql_cmd} \
--e "select active from mysql_query_rules where match_digest='^select.*from'\G;"\
- | grep active: | awk '{ printf $2 }'`
+-e "select writer_is_also_reader from mysql_group_replication_hostgroups\G;"\
+ | grep writer_is_also_reader: | awk '{ printf $2 }'`
 
-#如果离线节点总数大于0或者读路由没有启用,那么认为不正常
-if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 1 ]] ; then
+#如果离线节点总数大于0或者主节点可读启用,那么认为不正常
+if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 0 ]] ; then
 
    #查询节点总数
    mysql_count=`${proxysql_cmd} \
 -e "select count(distinct(hostname)) as count_mysql from mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup\G;"\
  | grep count_mysql: | awk '{ printf $2 }'`
    
-   #如果离线节点的总数乘以2大于节点总数并且读路由启用了
-   if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 1 ]] ; then
+   #如果离线节点的总数乘以2大于节点总数并且主节点可读未启用
+   if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 0 ]] ; then
 
-   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
+   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust the read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
 
    ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/primary_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
    
-   #调整所有读请求到主节点
+   #调整部分读请求到主节点
    ${proxysql_cmd} \
--e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
+-e "update mysql_group_replication_hostgroups set writer_is_also_reader=1;load mysql servers to runtime;save mysql servers to disk;"
 
-   #如果离线节点的总数乘以2小于节点总数并且读路由禁用了
-   elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 1 ]] ; then
+   #如果离线节点的总数乘以2小于节点总数并且主节点可读启用了
+   elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 0 ]] ; then
 
-   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust all read requests to the secondary\nbecause the number of offline MySQL is less than half!"
+   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will remove the read requests from the primary\nbecause the number of offline MySQL is less than half!"
    
    ${proxysql_cmd} \
 -e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
 
-   #调整所有读请求到副节点
+   #调整主节点上的读请求到副节点
    ${proxysql_cmd} \
--e "update mysql_query_rules set active=1 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
+-e "update mysql_group_replication_hostgroups set writer_is_also_reader=0;load mysql servers to runtime;save mysql servers to disk;"
 
    #如果离线节点总数等于节点总数
    elif [[ ${offline_mysql_count} == ${mysql_count} ]] ; then
