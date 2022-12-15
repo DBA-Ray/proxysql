@@ -17,7 +17,7 @@
     - "{{ eventslog_dir }}"
     - "{{ backupdir }}"
 
-- name: Copy the installation package,mysql source and logrotate script
+- name: Copy the installation package
   copy:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
