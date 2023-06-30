@@ -1,8 +1,9 @@
 ---
 - hosts: "{{ deploy_hosts }}"
+# - hosts: slave_monitor_dev1
   gather_facts: True
   remote_user: root
   vars:
-    whether_uninstall: True # Whether to uninstall the original service and then install it
+    whether_uninstall: false # Whether to uninstall the original service and then install it
   roles:
     - dba_ray.proxysql

@@ -90,8 +90,10 @@ mysql_servers =
 {
   address="{{ hostvars[srv]['inventory_hostname_short'] }}",
   port={{ mysql_port }},
+  gtid_port={{ gtid_port }},
   hostgroup={{ reader_hostgroup }},
   max_connections={{ max_connections }},
+  max_replication_lag={{ max_replication_lag }},
   compression=1   
 }{% if not loop.last %},{% endif %}
 {% endfor %}
@@ -101,8 +103,10 @@ mysql_servers =
 {
   address="{{ hostvars[srv]['inventory_hostname_short'] }}",
   port={{ mysql_port }},
+  gtid_port={{ gtid_port }},
   hostgroup=100,
   max_connections={{ max_connections }},
+  max_replication_lag={{ max_replication_lag }},
   compression=1
 }{% if not loop.last %},{% endif %}
 {% endfor %}
