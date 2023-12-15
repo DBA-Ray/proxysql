@@ -2,7 +2,7 @@
 # defaults file for proxysql_ray
 env: dev1
 # Which hosts to deploy
-deploy_hosts: "proxysql_{{ env }}"
+deploy_hosts: "mgr1_{{ env }}"
 # Monitor info
 message_type: weixin
 dingding_url: "oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
@@ -23,10 +23,10 @@ errorlog: "{{ datadir }}/proxysql.log"
 package_dir: /opt/package
 backupdir: /data/backup
 eventslog_dir: /data/events_log
-proxysql_package: proxysql-2.5.2-1-centos7.x86_64.rpm
+proxysql_package: proxysql-2.5.5-1-centos7.x86_64.rpm
 db_file: "{{ datadir }}/proxysql.db"
 db_stats_file: "{{ datadir }}/proxysql_stats.db"
-proxysql_upgrade_package: proxysql-2.5.2-1-centos7.x86_64.rpm
+proxysql_upgrade_package: proxysql-2.5.5-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'false'
