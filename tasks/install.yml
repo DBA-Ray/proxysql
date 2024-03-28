@@ -192,7 +192,7 @@
   proxysql_backend_servers:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
-    hostname: "{{ primary_host }}"
+    hostname: "{{ hostvars[primary_host]['ansible_default_ipv4']['address'] }}"
     hostgroup_id: "{{ reader_hostgroup }}"
     max_connections: "{{ max_connections }}"
     compression: 1
@@ -205,7 +205,7 @@
   proxysql_backend_servers:
     login_user: 'admin'
     login_password: "{{ admin_login_password }}"
-    hostname: "{{ primary_host }}"
+    hostname: "{{ hostvars[primary_host]['ansible_default_ipv4']['address'] }}"
     hostgroup_id: "{{ writer_hostgroup }}"
     max_connections: "{{ max_connections }}"
     compression: 1

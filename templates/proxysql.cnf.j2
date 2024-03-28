@@ -88,7 +88,8 @@ mysql_servers =
 {% if groups[mgr_group] is defined %}
 {% for srv in groups[mgr_group] %}
 {
-  address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+#  address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+  address="{{ hostvars[srv]['ansible_default_ipv4']['address'] }}",
   port={{ mysql_port }},
   gtid_port={{ gtid_port }},
   hostgroup={{ reader_hostgroup }},

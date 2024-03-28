@@ -41,6 +41,7 @@
 
 - name: Copy the mysql-community.repo
   copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
+  when: not whether_with_mysql
 
 - name: Install mysql client
   yum:
@@ -49,6 +50,7 @@
   register: result
   retries: 3
   until: result is succeeded
+  when: not whether_with_mysql
 
 - name: 安装基础软件包
   yum:

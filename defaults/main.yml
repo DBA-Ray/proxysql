@@ -23,10 +23,10 @@ errorlog: "{{ datadir }}/proxysql.log"
 package_dir: /opt/package
 backupdir: /data/backup
 eventslog_dir: /data/events_log
-proxysql_package: proxysql-2.5.5-1-centos7.x86_64.rpm
+proxysql_package: proxysql-2.6.1-1-centos7.x86_64.rpm
 db_file: "{{ datadir }}/proxysql.db"
 db_stats_file: "{{ datadir }}/proxysql_stats.db"
-proxysql_upgrade_package: proxysql-2.5.5-1-centos7.x86_64.rpm
+proxysql_upgrade_package: proxysql-2.6.1-1-centos7.x86_64.rpm
 # 定义初始化proxysql的变量
 # admin变量
 admin_web_enabled: 'false'
@@ -45,7 +45,7 @@ mysql_monitor_read_only_interval: 1000
 mysql_monitor_groupreplication_healthcheck_timeout: 1000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 12000
-mysql_server_version: '8.0.33'
+mysql_server_version: '8.3.0'
 mysql_max_allowed_packet: 1072693248
 max_replication_lag: 1
 #mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
@@ -73,4 +73,4 @@ active: 1
 match_digest: '^set'
 multiplex: 1
 #proxysql_binlog_reader变量
-gtid_port: 3307
+gtid_port: 0
