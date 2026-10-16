@@ -13,22 +13,41 @@
     state: stopped
   when: whether_uninstall | default(False) and result is succeeded
 
-- name: 备份原proxysql的db文件
-  copy:
-    src: "{{ db_file }}"
-    dest: "{{ package_dir }}"
-    remote_src: yes
-    owner: proxysql
-    group: proxysql
-    mode: '0644'
-    backup: no
+- name: obtain current timestamp
+  ansible.builtin.set_fact:
+    backup_ts: "{{ ansible_date_time.date | replace('-','') }}_{{ ansible_date_time.time | replace(':','') }}"
   when: whether_uninstall | default(False)
 
-- name: 卸载已经安装的proxysql
+- name: backup original db files and configuration files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ backupdir }}/{{ item }}.{{ backup_ts }}"
+    owner: proxysql
+    group: proxysql
+    remote_src: true
+    mode: preserve
+  loop:
+    - /etc/proxysql.cnf
+    - "{{ db_file }}"  
+  when: whether_uninstall | default(False)
+
+- name: Uninstall the installed proxysql(Redhat)
   yum:
     name: proxysql
     state: absent
-  when: whether_uninstall | default(False)
+  when: 
+    - ansible_os_family == "RedHat"    
+    - whether_uninstall | default(False)
+
+- name: Uninstall the installed proxysql(Ubuntu)
+  ansible.builtin.apt:
+    name: proxysql
+    state: absent
+    purge: true
+    autoremove: true
+  when:    
+    - ansible_os_family == "Debian"
+    - whether_uninstall | default(False)
 
 - name: Remove proxysql config file and proxysql directory
   file:
@@ -39,25 +58,30 @@
     - "{{ datadir }}"
   when: whether_uninstall | default(False)
 
-- name: Copy the mysql-community.repo
-  copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
-  when: not whether_with_mysql
-
-- name: Install mysql client
-  yum:
-    name: mysql-community-client.x86_64
-    state: present
-  register: result
-  retries: 3
-  until: result is succeeded
-  when: not whether_with_mysql
-
-- name: 安装基础软件包
+- name: install basic packages(ubuntu)
   yum:
     name: "{{ packages }}"
     state: latest
-
-- name: Install pexpect
+  when:
+    - ansible_os_family == "RedHat"
+ 
+- name: install pexpect
   pip:
     name: pexpect
     state: latest
+  when:
+    - ansible_os_family == "RedHat"
+
+- name: install basic packages(ubuntu)
+  ansible.builtin.apt:
+    name: "{{ packages }}"
+    state: latest
+  when:
+    - ansible_os_family == "Debian"
+
+- name: install pexpect(ubuntu)
+  pip:
+    name: pexpect
+    state: latest
+  when:
+    - ansible_os_family == "Debian"

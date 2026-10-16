@@ -2,19 +2,19 @@
 # defaults file for proxysql_ray
 env: dev1
 # Which hosts to deploy
-deploy_hosts: "mgr1_{{ env }}"
+deploy_hosts: "mysql_{{ env }}"
 # Monitor info
 message_type: weixin
-dingding_url: "oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
-weixin_url: "qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
+dingding_url: "1oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
+weixin_url: "1qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
 mobile: 15668661298
 # Which hosts to route
-primary_host: "mgr1_{{ env }}"
-mgr_group: "mgr_{{ env }}"
+primary_host: "mysql1_{{ env }}"
+mgr_group: "mysql_{{ env }}"
 slave_group: "slave_monitor_{{ env }}"
 # 默认启用基于组复制架构的主机角色分配策略
-proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
-proxysql_replication_hostgroups: False
+#proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
+proxysql_replication_hostgroups: True
 # Repo info
 remote_repo: https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm
 # 目录路径
@@ -23,7 +23,7 @@ errorlog: "{{ datadir }}/proxysql.log"
 package_dir: /opt/package
 backupdir: /data/backup
 eventslog_dir: /data/events_log
-proxysql_package: proxysql-2.6.1-1-centos7.x86_64.rpm
+proxysql_package: proxysql_2.6.5-ubuntu20_amd64.deb
 db_file: "{{ datadir }}/proxysql.db"
 db_stats_file: "{{ datadir }}/proxysql_stats.db"
 proxysql_upgrade_package: proxysql-2.6.1-1-centos7.x86_64.rpm
@@ -45,25 +45,25 @@ mysql_monitor_read_only_interval: 1000
 mysql_monitor_groupreplication_healthcheck_timeout: 1000
 mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 12000
-mysql_server_version: '8.3.0'
+mysql_server_version: '8.0.42'
 mysql_max_allowed_packet: 1072693248
 max_replication_lag: 1
 #mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
 # mysql servers变量
-mysql_port: 3377
+mysql_port: 3307
 max_connections: 4000
-# proxysql_cluster_enabled: true # If the variable is defined,it will enable the proxysql cluster(default disabled)
+proxysql_cluster_enabled: true # If the variable is defined,it will enable the proxysql cluster(default disabled)
 # 基于组复制架构的主机角色分配策略（传统复制也可以使用）
 writer_hostgroup: 10
 backup_writer_hostgroup: 20
 reader_hostgroup: 30
 offline_hostgroup: 40
-group_replication_active: 1
-writer_is_also_reader: 0
+group_replication_active: 0
+writer_is_also_reader: 1
 max_transactions_behind: 10000
 # mysql users变量
-business_user: actest
+business_user: test1
 # mysql query rules变量
 cache_ttl: 1
 # 如果定义navicat_query_rule，则表示添加适配navicat的路由规则

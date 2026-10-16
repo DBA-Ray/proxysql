@@ -1,4 +1,41 @@
 # 安装proxysql并初始化
+- name: Copy the mysql-community.repo
+  copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
+  when:
+    - ansible_os_family == "RedHat"
+    - not whether_with_mysql
+
+- name: Install mysql client
+  yum:
+    name: mysql-community-client.x86_64
+    state: present
+  register: result
+  retries: 3
+  until: result is succeeded
+  when:
+    - ansible_os_family == "RedHat"          
+    - not whether_with_mysql
+
+- name: apt update
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  retries: 3
+  until: result is succeeded
+  when:
+    - ansible_os_family == "Debian"
+    - not whether_with_mysql
+
+- name: apt install mysql-client
+  ansible.builtin.apt:
+    name: mysql-client
+    state: present
+  retries: 3
+  until: result is succeeded
+  when:
+    - ansible_os_family == "Debian"
+    - not whether_with_mysql
+
 - name: Ensure group "proxysql" exists
   group:
     name: proxysql
