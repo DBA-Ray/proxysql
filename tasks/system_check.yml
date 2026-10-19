@@ -13,6 +13,12 @@
     state: stopped
   when: whether_uninstall | default(False) and result is succeeded
 
+- name: Create preparing directories for proxysql
+  file: path={{ item }} state=directory owner=proxysql group=proxysql
+  with_items:
+    - "{{ backupdir }}"
+    - "{{ package_dir }}"
+
 - name: obtain current timestamp
   ansible.builtin.set_fact:
     backup_ts: "{{ ansible_date_time.date | replace('-','') }}_{{ ansible_date_time.time | replace(':','') }}"
@@ -58,16 +64,9 @@
     - "{{ datadir }}"
   when: whether_uninstall | default(False)
 
-- name: install basic packages(ubuntu)
+- name: install basic packages(redhat)
   yum:
     name: "{{ packages }}"
-    state: latest
-  when:
-    - ansible_os_family == "RedHat"
- 
-- name: install pexpect
-  pip:
-    name: pexpect
     state: latest
   when:
     - ansible_os_family == "RedHat"
@@ -79,9 +78,7 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: install pexpect(ubuntu)
+- name: install pexpect
   pip:
     name: pexpect
     state: latest
-  when:
-    - ansible_os_family == "Debian"
