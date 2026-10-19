@@ -1,11 +1,11 @@
 # 安装proxysql并初始化
-- name: Copy the mysql-community.repo
+- name: Copy the mysql-community.repo(redhat)
   copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
   when:
     - ansible_os_family == "RedHat"
     - not whether_with_mysql
 
-- name: Install mysql client
+- name: Install mysql client(redhat)
   yum:
     name: mysql-community-client.x86_64
     state: present
@@ -16,7 +16,7 @@
     - ansible_os_family == "RedHat"          
     - not whether_with_mysql
 
-- name: apt update
+- name: apt update(debian)
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 0
@@ -26,7 +26,7 @@
     - ansible_os_family == "Debian"
     - not whether_with_mysql
 
-- name: apt install mysql-client
+- name: apt install mysql-client(debian)
   ansible.builtin.apt:
     name: mysql-client
     state: present
@@ -50,9 +50,7 @@
   file: path={{ item }} state=directory owner=proxysql group=proxysql
   with_items:
     - "{{ datadir }}"
-    - "{{ package_dir }}"
     - "{{ eventslog_dir }}"
-    - "{{ backupdir }}"
 
 - name: Copy the installation package
   copy:
@@ -88,10 +86,19 @@
     hour: "23"
     job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null 2>&1 &"
 
-- name: Install ProxySQL
+- name: Install ProxySQL(Redhat)
   yum:
     name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
+  when:
+    - ansible_os_family == "RedHat"
+
+- name: Install ProxySQL(debian)
+  ansible.builtin.apt:
+    name: "{{ package_dir }}/{{ proxysql_package }}"
+    state: present
+  when:
+    - ansible_os_family == "Debian"
 
 - name: Rendering scheudler file
   template:
@@ -251,24 +258,24 @@
     load_to_runtime: True
     save_to_disk: True  
 
-# - name: Add proxysql scheduler for auto adjust query rules
-#   proxysql_scheduler:
-#     login_user: 'admin'
-#     login_password: "{{ admin_login_password }}"
-#     active: 1
-#     interval_ms: 3000
-#     filename: "{{ datadir }}/auto_adjust_mysql_query_rules.sh"
-#     state: present
-#     load_to_runtime: True
-#     save_to_disk: True
+- name: Add proxysql scheduler for auto adjust query rules
+  proxysql_scheduler:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    active: 0
+    interval_ms: 3000
+    filename: "{{ datadir }}/auto_adjust_mysql_query_rules.sh"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
 
-# - name: Add proxysql scheduler for backup
-#   proxysql_scheduler:
-#     login_user: 'admin'
-#     login_password: "{{ admin_login_password }}"
-#     active: 1
-#     interval_ms: 28800000
-#     filename: "{{ datadir }}/backup.sh"
-#     state: present
-#     load_to_runtime: True
-#     save_to_disk: True
+- name: Add proxysql scheduler for backup
+  proxysql_scheduler:
+    login_user: 'admin'
+    login_password: "{{ admin_login_password }}"
+    active: 1
+    interval_ms: 28800000
+    filename: "{{ datadir }}/backup.sh"
+    state: present
+    load_to_runtime: True
+    save_to_disk: True
