@@ -1,91 +1,172 @@
-- name: Copy the latest ProxySQL
-  copy:
-    src: "{{ proxysql_upgrade_package }}"
-    dest: "{{ package_dir }}"
+---
+# 原地升级，不先卸载。上传和认证检查均在停机前完成。
+# keepalived 仅在原先运行时恢复，且必须等管理 SQL 检查通过。
+- name: Gather services before upgrade
+  ansible.builtin.service_facts:
 
-- name: Stop keepalived
-  systemd:
-    name: keepalived
-    state: stopped
-
-- name: 停止proxysql服务
-  systemd:
-    name: proxysql
-    state: stopped
-
-- name: obtain current timestamp
+- name: Remember whether keepalived was running
   ansible.builtin.set_fact:
-    backup_ts: "{{ ansible_date_time.date | replace('-','') }}_{{ ansible_date_time.time | replace(':','') }}"
-  when: whether_uninstall | default(False)
+    proxysql_restore_keepalived: "{{ ansible_facts.services.get('keepalived.service', {}).get('state', '') == 'running' }}"
 
-- name: backup original db files and configuration files
+- name: Check required existing database
+  ansible.builtin.stat:
+    path: "{{ db_file }}"
+  register: proxysql_upgrade_db
+
+- name: Require an existing installation for upgrade
+  ansible.builtin.assert:
+    that:
+      - proxysql_upgrade_db.stat.isreg | default(false)
+      - "'proxysql.service' in ansible_facts.services"
+    fail_msg: '未找到现有 ProxySQL 数据库或服务，请使用安装流程。'
+
+- name: Ensure package staging directory exists
+  ansible.builtin.file:
+    path: "{{ package_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Stage package before downtime
   ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "{{ backupdir }}/{{ item }}.{{ backup_ts }}"
-    owner: proxysql
-    group: proxysql
-    remote_src: true
-    mode: preserve
-  loop:
-    - /etc/proxysql.cnf
-    - "{{ db_file }}"  
-    - "{{ db_stats_file }}"
-
-- name: uninstall proxysql(redhat)
-  yum:
-    name: proxysql
-    state: absent
-  when:
-    - ansible_os_family == "RedHat"
-
-- name: uninstall proxysql(debian)
-  ansible.builtin.apt:
-    name: proxysql
-    state: absent
-    purge: true
-    autoremove: true
-  when:
-    - ansible_os_family == "Debian"
-
-- name: Install the latest ProxySQL(redhat)
-  yum:
-    name: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
-    state: present
-  when:
-    - ansible_os_family == "RedHat"
-  notify:
-    - Start ProxySQL
-    - Start keepalived
-
-- name: Install the latest ProxySQL(debian)
-  ansible.builtin.apt:
-    name: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
-    state: present
-  when:
-    - ansible_os_family == "Debian"
-  notify:
-    - Start ProxySQL
-    - Start keepalived
-
-- name: Rename proxysql.rpmsave file to proxysql
-  copy:
-    src: /etc/logrotate.d/proxysql.rpmsave
-    dest: /etc/logrotate.d/proxysql
-    remote_src: yes
+    src: "{{ proxysql_upgrade_package }}"
+    dest: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
     owner: root
     group: root
     mode: '0644'
 
-- name: copy proxysql.cnf to /etc/proxysql.cnf
-  copy:
-    src: "{{ backupdir }}/proxysql.cnf.{{ backup_ts }}"
-    dest: /etc/proxysql.cnf
-    remote_src: yes
-    owner: proxysql
-    group: proxysql
-    mode: '0644'
+- name: Check current SQL endpoint before upgrade
+  ansible.builtin.include_tasks: readiness.yml
 
-- name: Start proxysql
-  systemd:
-    name: proxysql
-    state: started
+- name: Check maintenance dependencies before downtime
+  ansible.builtin.shell: |
+    for cmd in bash mysql mysqldump mysql_config_editor timeout flock curl zstd; do
+      command -v "$cmd" >/dev/null || exit 1
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+# 随机后缀防止重试覆盖上一次冷备，目录必须在 datadir 外。
+- name: Create unique recovery directory
+  ansible.builtin.tempfile:
+    state: directory
+    path: "{{ upgrade_backup_root | dirname }}"
+    prefix: "{{ upgrade_backup_root | basename }}_"
+  register: proxysql_upgrade_backup
+
+- name: Upgrade with cold backup and readiness checks
+  block:
+    - name: Stop keepalived only if previously running
+      ansible.builtin.systemd:
+        name: keepalived
+        state: stopped
+      when: proxysql_restore_keepalived | bool
+
+    - name: Stop ProxySQL before copying SQLite files
+      ansible.builtin.systemd:
+        name: proxysql
+        state: stopped
+
+    - name: Locate database, WAL and configuration files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ db_file }}"
+        - "{{ db_file }}-wal"
+        - "{{ db_file }}-shm"
+        - "{{ db_stats_file }}"
+        - "{{ db_stats_file }}-wal"
+        - "{{ db_stats_file }}-shm"
+        - /etc/proxysql.cnf
+        - /etc/logrotate.d/proxysql
+        - /etc/systemd/system/proxysql.service.d/override.conf
+      register: proxysql_recovery_files
+
+    - name: Save stopped database and configuration files
+      ansible.builtin.copy:
+        src: "{{ item.item }}"
+        dest: "{{ proxysql_upgrade_backup.path }}/{{ item.item | basename }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      loop: "{{ proxysql_recovery_files.results }}"
+      when: item.stat.isreg | default(false)
+
+    - name: Upgrade local RPM in place
+      ansible.builtin.yum:
+        name: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+    - name: Upgrade local DEB in place
+      ansible.builtin.apt:
+        deb: "{{ package_dir }}/{{ proxysql_upgrade_package }}"
+        state: present
+        # postinst 不得在维护配置恢复前自行拉起服务。
+        policy_rc_d: 101
+      when: ansible_os_family == 'Debian'
+
+    - name: Ensure custom service directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/proxysql.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Refresh custom datadir service override
+      ansible.builtin.template:
+        src: proxysql.service.override.conf.j2
+        dest: /etc/systemd/system/proxysql.service.d/override.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Refresh log rotation policy
+      ansible.builtin.template:
+        src: proxysql
+        dest: /etc/logrotate.d/proxysql
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Refresh maintenance scripts before returning traffic
+      ansible.builtin.include_tasks: maintenance.yml
+
+    - name: Start upgraded ProxySQL
+      ansible.builtin.systemd:
+        name: proxysql
+        daemon_reload: true
+        state: started
+        enabled: true
+
+    - name: Verify upgraded SQL endpoint
+      ansible.builtin.include_tasks: readiness.yml
+
+    - name: Restore keepalived after successful SQL readiness
+      ansible.builtin.systemd:
+        name: keepalived
+        state: started
+      when: proxysql_restore_keepalived | bool
+
+  rescue:
+    # 数据库格式可能已迁移，不盲目降级二进制或覆盖新数据库。
+    # 保留故障现场与冷备，停止本机服务和 VIP，交由人工恢复一致的版本/数据库。
+    - name: Keep failed upgrade isolated from VIP traffic
+      ansible.builtin.systemd:
+        name: keepalived
+        state: stopped
+      when: proxysql_restore_keepalived | bool
+
+    - name: Stop unsuccessful ProxySQL upgrade
+      ansible.builtin.systemd:
+        name: proxysql
+        state: stopped
+
+    - name: Report recovery directory and stop rolling upgrade
+      ansible.builtin.fail:
+        msg: >-
+          ProxySQL 升级失败，恢复目录为 {{ proxysql_upgrade_backup.path }}，备份可能尚未完成，请先核对文件。
+          请检查失败任务，用原版本包及同一份数据库/WAL 恢复；
+          验证 SQL 和后端可用性后再恢复 keepalived。不会自动降级或覆盖数据库。

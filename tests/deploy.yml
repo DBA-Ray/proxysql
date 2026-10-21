@@ -3,8 +3,10 @@
 # - hosts: slave_monitor_dev1
   gather_facts: True
   remote_user: root
+  serial: 1
+  any_errors_fatal: true
   vars:
-    whether_uninstall: false # Whether to uninstall the original service and then install it
+    whether_uninstall: false # 默认保留数据库；重装会删除 datadir，必须显式改为 true
     whether_with_mysql: true # Whether to install on the mysql server
   roles:
     - dba_ray.proxysql

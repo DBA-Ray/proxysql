@@ -1,84 +1,121 @@
-# 系统环境检测，排除干扰
+# 系统环境检测、备份卸载与依赖安装
 
-- name: Proxysql status
-  systemd:
-    name: proxysql
-    state: started
-  register: result
-  when: whether_uninstall | default(False)
+# ==========================================
+# 1. 卸载逻辑 (仅在 whether_uninstall 为 true 时执行)
+# ==========================================
+- name: Uninstall ProxySQL process
+  when: whether_uninstall | default(false) | bool
+  block:
+    # service_facts 能区分“服务未安装”和“停止服务失败”。后者必须终止卸载，
+    # 否则可能备份正在写入的 SQLite 数据库，然后删除仍被进程使用的目录。
+    - name: Check installed services
+      ansible.builtin.service_facts:
 
-- name: Stop proxysql server
-  systemd:
-    name: proxysql
-    state: stopped
-  when: whether_uninstall | default(False) and result is succeeded
+    - name: Stop proxysql server
+      ansible.builtin.systemd:
+        name: proxysql
+        state: stopped
+      when: "'proxysql.service' in ansible_facts.services"
 
-- name: Create preparing directories for proxysql
-  file: path={{ item }} state=directory owner=proxysql group=proxysql
-  with_items:
-    - "{{ backupdir }}"
-    - "{{ package_dir }}"
+    - name: Ensure external recovery parent exists
+      ansible.builtin.file:
+        path: "{{ uninstall_backup_root | dirname }}"
+        state: directory
+        owner: root
+        group: root
 
-- name: obtain current timestamp
-  ansible.builtin.set_fact:
-    backup_ts: "{{ ansible_date_time.date | replace('-','') }}_{{ ansible_date_time.time | replace(':','') }}"
-  when: whether_uninstall | default(False)
+    # 随机后缀保证同一秒重试不会覆盖之前的恢复副本。
+    - name: Create unique uninstall recovery directory
+      ansible.builtin.tempfile:
+        path: "{{ uninstall_backup_root | dirname }}"
+        prefix: "{{ uninstall_backup_root | basename }}_"
+        state: directory
+      register: proxysql_uninstall_backup
 
-- name: backup original db files and configuration files
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "{{ backupdir }}/{{ item }}.{{ backup_ts }}"
-    owner: proxysql
-    group: proxysql
-    remote_src: true
-    mode: preserve
-  loop:
-    - /etc/proxysql.cnf
-    - "{{ db_file }}"  
-  when: whether_uninstall | default(False)
+    - name: Remember uninstall recovery location
+      ansible.builtin.set_fact:
+        uninstall_backup_dir: "{{ proxysql_uninstall_backup.path }}"
 
-- name: Uninstall the installed proxysql(Redhat)
-  yum:
-    name: proxysql
-    state: absent
-  when: 
-    - ansible_os_family == "RedHat"    
-    - whether_uninstall | default(False)
+    - name: Check if files exist for backup
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/proxysql.cnf
+        - "{{ db_file }}"
+        - "{{ db_file }}-wal"
+        - "{{ db_file }}-shm"
+        - "{{ db_stats_file }}"
+        - "{{ db_stats_file }}-wal"
+        - "{{ db_stats_file }}-shm"
+        - /lib/systemd/system/proxysql.service
+        - /etc/systemd/system/proxysql.service.d/override.conf
+      register: file_stats
 
-- name: Uninstall the installed proxysql(Ubuntu)
-  ansible.builtin.apt:
-    name: proxysql
-    state: absent
-    purge: true
-    autoremove: true
-  when:    
-    - ansible_os_family == "Debian"
-    - whether_uninstall | default(False)
+    - name: Backup original db files and configuration files
+      ansible.builtin.copy:
+        src: "{{ item.item }}"
+        dest: "{{ uninstall_backup_dir }}/{{ item.item | basename }}"
+        owner: root
+        group: root
+        remote_src: true
+        mode: preserve
+      loop: "{{ file_stats.results | default([]) }}"
+      when: item.stat.exists
 
-- name: Remove proxysql config file and proxysql directory
-  file:
-    path: "{{ item }}"
-    state: absent
-  with_items:
-    - /etc/proxysql.cnf
-    - "{{ datadir }}"
-  when: whether_uninstall | default(False)
+    - name: Uninstall the installed proxysql (RedHat)
+      ansible.builtin.yum:
+        name: proxysql
+        state: absent
+      when: ansible_os_family == "RedHat"
 
-- name: install basic packages(redhat)
-  yum:
-    name: "{{ packages }}"
-    state: latest
-  when:
-    - ansible_os_family == "RedHat"
+    - name: Uninstall the installed proxysql (Ubuntu)
+      ansible.builtin.apt:
+        name: proxysql
+        state: absent
+        purge: true
+        autoremove: true
+      when: ansible_os_family == "Debian"
 
-- name: install basic packages(ubuntu)
-  ansible.builtin.apt:
-    name: "{{ packages }}"
-    state: latest
-  when:
-    - ansible_os_family == "Debian"
+    # 包管理器先完成卸载脚本，再清理 Role 管理的文件；不手工删除厂商 unit。
+    - name: Remove role-managed files after package removal
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/proxysql.cnf
+        - /etc/systemd/system/proxysql.service.d
+        - "{{ datadir }}"
 
-- name: install pexpect
-  pip:
+
+# ==========================================
+# 2. 安装基础依赖包
+# ==========================================
+
+# ----- RedHat / CentOS -----
+- name: Install basic packages (RedHat)
+  ansible.builtin.yum:
+    name: "{{ packages | default([]) }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install pexpect via pip (RedHat)
+  ansible.builtin.pip:
     name: pexpect
-    state: latest
+    state: present
+  when: ansible_os_family == "RedHat"
+
+# ----- Ubuntu / Debian -----
+- name: Install basic packages (Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ packages_debian | default([]) }}"
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+# 💡 优化点：Ubuntu 下直接用 apt 安装 python3-pexpect，避免 pip 全局安装报错
+- name: Install pexpect via apt (Ubuntu)
+  ansible.builtin.apt:
+    name: python3-pexpect
+    state: present
+  when: ansible_os_family == "Debian"

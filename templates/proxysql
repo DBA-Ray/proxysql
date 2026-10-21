@@ -1,4 +1,4 @@
-{{ datadir }}/proxysql.log {
+{{ errorlog }} {
 missingok
 daily
 dateext
@@ -8,8 +8,21 @@ delaycompress
 create 0600 proxysql proxysql
 rotate 7
 postrotate
-mysql --login-path=proxysql -e "PROXYSQL FLUSH LOGS;"
-sleep 7
-mysql --login-path=proxysql -e "PROXYSQL FLUSH LOGS;"
+# 日志轮转以 root 执行，使用 Role 设置的 login-path；超时后返回失败给 logrotate。
+# 不重复 FLUSH 和固定 sleep，避免轮转任务被失联的管理端口长期阻塞。
+timeout --kill-after=5 {{ admin_query_timeout }} mysql --login-path=proxysql --protocol=TCP --host=127.0.0.1 --port={{ admin_login_port }} --user={{ proxysql_admin_user }} --connect-timeout=5 -e "PROXYSQL FLUSH LOGS;"
 endscript
+}
+
+# 维护脚本每条日志都会重新打开文件，直接轮转即可，无需 copytruncate。
+# 定时任务异常时避免备份/告警日志无限增长占满数据盘。
+{{ backup_log_file }} {{ auto_adjust_log_file }} {
+    missingok
+    daily
+    maxsize 20M
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0600 root root
 }

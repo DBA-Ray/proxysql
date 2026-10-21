@@ -4,6 +4,7 @@
   vars:
     is_upgrade: True
   serial: 1
-  max_fail_percentage: 20
+  # 任一节点失败即停止后续节点升级，保留其余节点继续提供服务。
+  any_errors_fatal: true
   roles:
     - dba_ray.proxysql

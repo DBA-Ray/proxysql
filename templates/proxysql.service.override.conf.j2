@@ -1,0 +1,14 @@
+﻿# {{ ansible_managed }}
+# 用 drop-in 指定自定义 datadir, 避免直接改发行版 unit 文件
+[Service]
+ExecStart=
+ExecStart=/usr/bin/proxysql --idle-threads -c /etc/proxysql.cnf -D {{ datadir }} $PROXYSQL_OPTS
+PIDFile={{ datadir }}/proxysql.pid
+# 达到 systemd 默认启动限频时会停止重启，需要运维检查日志后 reset-failed。
+# 短暂异常允许自动恢复，但不隐藏持续的配置错误。
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=60s
+LimitNOFILE=65536
+

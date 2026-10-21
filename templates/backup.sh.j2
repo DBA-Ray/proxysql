@@ -1,123 +1,281 @@
 #!/bin/bash
+# {{ ansible_managed }}
+# ProxySQL 备份: 压缩 events_log -> 清理过期日志 -> 备份 main 库 -> 成功后再清老备份
 
-#Author DBA R
+# 退出码: 0 成功(含并发跳过) / 1 备份失败 / 2 环境不满足
 
-source /etc/profile
+set -u
+set -o pipefail
+umask 077
 
-export MYSQL_PWD="{{ admin_login_password }}"
+# cron 使用固定 PATH，不加载交互式 profile，避免用户环境中的 exit、输出或变量影响备份。
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
 
-backupdir={{ backupdir }}
+readonly BACKUP_DIR={{ backupdir | quote }}
+readonly EVENTSLOG_DIR={{ eventslog_dir | quote }}
+readonly HOST={{ ansible_hostname | quote }}
+readonly ENV_NAME={{ env | quote }}
+readonly IPADDR={{ ansible_default_ipv4.address | default('unknown') | quote }}
+readonly MSG_TYPE={{ message_type | quote }}
+# quote 由 Ansible 做 shell 转义，密码中的单引号、美元符号和换行均按字面量传入。
+readonly ADMIN_PASSWORD={{ admin_login_password | quote }}
+readonly ADMIN_HOST='127.0.0.1'
+readonly ADMIN_PORT={{ admin_login_port | quote }}
+readonly ADMIN_USER={{ proxysql_admin_user | quote }}
+readonly KEEP_DAYS={{ backup_keep_days | quote }}
+readonly LOG_KEEP_DAYS={{ eventslog_keep_days | quote }}
+readonly DIGEST_FLUSH_WAIT={{ digest_flush_wait | quote }}
+readonly QUERY_TIMEOUT={{ admin_query_timeout | quote }}
+readonly DUMP_TIMEOUT={{ backup_dump_timeout | quote }}
+readonly COMPRESS_THREADS={{ eventslog_compress_threads | quote }}
+readonly LOG_FILE={{ backup_log_file | quote }}
+readonly NOTIFY_LIB={{ (datadir ~ '/notify.sh') | quote }}
+readonly LOCK_FILE={{ backup_lock_file | quote }}
 
-hostname={{ ansible_hostname }}
-
-delete_time=`date  "+%Y%m%d" -d "-29 days"`
-
-eventslog_dir={{ eventslog_dir }}
-
-## 发送消息方法
-function SendMessage()
-
-{
-
-dingding_url="https://{{ dingding_url }}"
-
-#向钉钉发送消息方法
-function SendMessageToDingding()
-{ 
-curl "${dingding_url}" -H 'Content-Type: application/json' -d "
- { \"msgtype\":\"text\",
-\"text\":{
-\"content\":\"${1}\"},
-\"at\":{
-\"atMobiles\":[\"15668661298\"],
-\"isAtAll\":false} }"
-}
-
-weixin_url="https://{{ weixin_url }}"
-
-#向微信发送消息方法
-function SendMessageToWeixin()
-{
-cat > sendweb.sh<< EOF
-    curl "${weixin_url}" \
-   -H 'Content-Type: application/json' \
-   -d '
-   {
-        "msgtype": "text",
-        "text": {
-            "content": "${1}",
-            "mentioned_mobile_list":["15668661298"]
-        }
-   }'
-EOF
-sh sendweb.sh && rm -rf sendweb.sh
-}
-
-if [ ${1} == "dingding" ]
-
-then SendMessageToDingding "${2}"
-
-elif [ ${1} == "weixin" ]
-
-then SendMessageToWeixin "${2}"
-
-else echo "未设置发送消息方式"
-
-fi
-
-}
-
-function backup() {
-
-#Save query digest to disk
-
-mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "set admin-stats_mysql_query_digest_to_disk=1;LOAD ADMIN VARIABLES TO RUNTIME;"
-
-sleep 7
-
-mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password \
--e "set admin-stats_mysql_query_digest_to_disk=0;LOAD ADMIN VARIABLES TO RUNTIME;SAVE ADMIN VARIABLES TO DISK;"
-
-mysqldump_version=`mysqldump -V|awk '{print $5}'|awk '{print substr($1,1,1)}'`
-
-if [[ ${mysqldump_version} == 5 ]];then
-    mysqldump -u admin -h 127.0.0.1 -P6032 --no-tablespaces --skip-triggers --skip-add-locks -B main > ${backupdir}/${hostname}_`date "+%Y%m%d_%H%M%S"`.sql
+if [ -f "${NOTIFY_LIB}" ]; then
+    # shellcheck source=/dev/null
+    . "${NOTIFY_LIB}"
 else
-    mysqldump -u admin -h 127.0.0.1 -P6032 --skip-column-statistics --no-tablespaces --skip-triggers --skip-add-locks -B main > ${backupdir}/${hostname}_`date "+%Y%m%d_%H%M%S"`.sql
+    SendMessage() { return 0; }
 fi
 
-if [ $? -eq 0 ];then
-    echo "The Proxysql BackUp Successfully!"
-else
-    echo "The Proxysql BackUp Failure!"
-    SendMessage "{{ message_type }}" "The Proxysql {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} BackUp Failure!"
-fi
-
+log() {
+    local msg
+    msg="$(date '+%F %T') [$$] $*"
+    printf '%s\n' "${msg}"
+    { printf '%s\n' "${msg}" >>"${LOG_FILE}"; } 2>/dev/null || true
+    return 0
 }
 
-function compress_logs () {
+ADMIN_USE_LOGIN_PATH=''
+DIGEST_PREVIOUS=''
 
-ls -lt ${eventslog_dir}/events_log.*| grep ^[^d] |grep -v '.zst'| awk '{if (NR>1)print $9}' | while read filename
-
-do
-
-zstd -T0 -v --rm ${filename}
-
-done
-
+select_admin_auth() {
+    [ -n "${ADMIN_USE_LOGIN_PATH}" ] && return 0
+    # 显式指定端点，防止旧 login-path 把备份连到其他实例。每次执行只探测一次。
+    if timeout --kill-after=5 "${QUERY_TIMEOUT}" mysql --login-path=proxysql \
+        --protocol=TCP -h "${ADMIN_HOST}" -P "${ADMIN_PORT}" -u "${ADMIN_USER}" \
+        --connect-timeout=5 -e 'SELECT 1' >/dev/null 2>&1; then
+        ADMIN_USE_LOGIN_PATH=yes
+    else
+        ADMIN_USE_LOGIN_PATH=no
+    fi
 }
 
-function purge_files_logs () {
-
-find ${backupdir}/ -name "${hostname}_${delete_time}*" -exec rm -rf {} \;
-
-find ${eventslog_dir}/ -mtime +30 -name "*" -exec rm -rf {} \;
-
+mysql_admin() {
+    select_admin_auth
+    if [ "${ADMIN_USE_LOGIN_PATH}" = yes ]; then
+        timeout --kill-after=5 "${QUERY_TIMEOUT}" mysql --login-path=proxysql \
+            --protocol=TCP -h "${ADMIN_HOST}" -P "${ADMIN_PORT}" -u "${ADMIN_USER}" \
+            --connect-timeout=5 "$@"
+    else
+        MYSQL_PWD="${ADMIN_PASSWORD}" timeout --kill-after=5 "${QUERY_TIMEOUT}" mysql \
+            -u "${ADMIN_USER}" -h "${ADMIN_HOST}" -P "${ADMIN_PORT}" \
+            --protocol=TCP --connect-timeout=5 "$@"
+    fi
 }
 
-purge_files_logs
+mysqldump_admin() {
+    select_admin_auth
+    if [ "${ADMIN_USE_LOGIN_PATH}" = yes ]; then
+        timeout --kill-after=5 "${DUMP_TIMEOUT}" mysqldump --login-path=proxysql \
+            --protocol=TCP -h "${ADMIN_HOST}" -P "${ADMIN_PORT}" -u "${ADMIN_USER}" \
+            --connect-timeout=5 "$@"
+    else
+        MYSQL_PWD="${ADMIN_PASSWORD}" timeout --kill-after=5 "${DUMP_TIMEOUT}" mysqldump \
+            -u "${ADMIN_USER}" -h "${ADMIN_HOST}" -P "${ADMIN_PORT}" \
+            --protocol=TCP --connect-timeout=5 "$@"
+    fi
+}
 
-backup
+# digest 落盘是可选增强，不改变管理员原先的开关，也不保存其他 ADMIN 变量。
+# 若中途收到信号，EXIT trap 再尝试恢复；SIGKILL/主机掉电仍需人工检查运行时变量。
+restore_digest() {
+    [ -n "${DIGEST_PREVIOUS}" ] || return 0
+    if mysql_admin -e "SET admin-stats_mysql_query_digest_to_disk=${DIGEST_PREVIOUS}; LOAD ADMIN VARIABLES TO RUNTIME;"; then
+        DIGEST_PREVIOUS=''
+    else
+        log 'WARN: 恢复 digest 落盘开关失败，请检查 runtime_global_variables'
+        return 1
+    fi
+}
 
-compress_logs
+flush_digest() {
+    local original
+    if ! original=$(mysql_admin --batch --skip-column-names -e \
+        "SELECT variable_value FROM runtime_global_variables WHERE variable_name='admin-stats_mysql_query_digest_to_disk';"); then
+        log 'WARN: 读取 digest 开关失败，跳过落盘'; return 0
+    fi
+    case "${original}" in
+        1|true) return 0 ;;
+        0|false) DIGEST_PREVIOUS=0 ;;
+        *) log 'WARN: digest 开关值未知，保持原状'; return 0 ;;
+    esac
+    if mysql_admin -e 'SET admin-stats_mysql_query_digest_to_disk=1; LOAD ADMIN VARIABLES TO RUNTIME;'; then
+        sleep "${DIGEST_FLUSH_WAIT}"
+    else
+        log 'WARN: 开启 digest 落盘失败，继续配置备份'
+    fi
+    restore_digest || true
+}
+
+backup() {
+    local ts outfile tmpfile rc help_txt opt desc="无"
+    local opts=()
+
+    mkdir -p "${BACKUP_DIR}" 2>/dev/null || {
+        log "ERROR: 备份目录无法创建 ${BACKUP_DIR}"; return 1; }
+
+    # PID 后缀避免同一秒重试覆盖已成功的备份。
+    ts=$(date '+%Y%m%d_%H%M%S')
+    outfile="${BACKUP_DIR}/${HOST}_${ts}_$$.sql"
+    tmpfile="${outfile}.tmp"
+
+    flush_digest
+
+    help_txt=$(timeout --kill-after=5 "${QUERY_TIMEOUT}" mysqldump --help 2>/dev/null) || help_txt=""
+    # mysqldump --help 通常显示 column-statistics 等正向名称，不显示 skip-* 别名。
+    # 只检测需要兼容的特性；锁表/触发器不适用于 ProxySQL 的 SQLite 管理库。
+    opts=(--skip-lock-tables --skip-add-locks --skip-triggers)
+    for opt in --no-tablespaces; do
+        grep -q -- "${opt}" <<<"${help_txt}" && opts+=("${opt}")
+    done
+    if grep -q -- 'column-statistics' <<<"${help_txt}"; then opts+=(--column-statistics=0); fi
+    [ ${#opts[@]} -gt 0 ] && desc="${opts[*]}"
+
+    log "INFO: 开始备份 main 库 -> ${outfile} (选项: ${desc})"
+    mysqldump_admin ${opts[@]+"${opts[@]}"} -B main >"${tmpfile}" 2>>"${LOG_FILE}"
+    rc=$?
+
+    if [ "${rc}" -ne 0 ]; then
+        log "ERROR: mysqldump 执行失败 (rc=${rc})"
+        rm -f "${tmpfile}"
+        return 1
+    fi
+    if [ ! -s "${tmpfile}" ]; then
+        log "ERROR: 备份产物为空 ${tmpfile}"
+        rm -f "${tmpfile}"
+        return 1
+    fi
+
+    if ! mv -f "${tmpfile}" "${outfile}"; then
+        log "ERROR: 无法保存备份文件 ${outfile}, 保留临时文件 ${tmpfile}"
+        return 1
+    fi
+    log "INFO: 备份成功 $(du -h "${outfile}" 2>/dev/null | cut -f1) ${outfile}"
+    return 0
+}
+
+compress_logs() {
+    local f tmp before after n=0 total=0
+
+    if [ ! -d "${EVENTSLOG_DIR}" ]; then
+        log "WARN: eventslog_dir 不存在 ${EVENTSLOG_DIR}, 跳过压缩"
+        return 0
+    fi
+    if ! command -v zstd >/dev/null 2>&1; then
+        log "WARN: 未找到 zstd, 跳过 events_log 压缩"
+        return 0
+    fi
+
+    while IFS= read -r -d '' f; do
+        [ -f "${f}" ] || continue
+        [[ "${f##*/}" =~ ^events_log\.[0-9]+$ ]] || continue
+        total=$((total + 1))
+        tmp="${f}.zst.tmp.$$"
+        before=$(stat -c '%i:%s:%y' -- "${f}") || continue
+        # 先写临时文件并验证，再原子发布；压缩失败不覆盖已有有效压缩包。
+        if zstd -T"${COMPRESS_THREADS}" -q -f "${f}" -o "${tmp}" 2>>"${LOG_FILE}" \
+           && zstd -q -t "${tmp}" 2>>"${LOG_FILE}"; then
+            after=$(stat -c '%i:%s:%y' -- "${f}") || after=''
+            if [ "${before}" != "${after}" ]; then
+                log "WARN: 日志仍在变化，保留原文件 ${f}"
+                rm -f -- "${tmp}"
+                continue
+            fi
+            # 保留事件日志的时间，避免刚压缩的旧日志又多保留一整个周期。
+            if ! touch -r "${f}" "${tmp}" || ! mv -f -- "${tmp}" "${f}.zst"; then
+                log "WARN: 无法发布压缩文件，保留原日志 ${f}"
+                rm -f -- "${tmp}"; continue
+            fi
+            rm -f "${f}" && n=$((n + 1))
+        else
+            log "WARN: 压缩失败或校验未通过, 保留原文件 ${f}"
+            rm -f -- "${tmp}"
+        fi
+    done < <(
+        # ProxySQL 以递增数字命名事件日志，始终跳过编号最大的当前文件。
+        # 使用 NUL 分隔，路径中的空格或换行不会被拆成多个文件。
+        find "${EVENTSLOG_DIR}" -regextype posix-extended -maxdepth 1 -type f \
+             -regex '.*/events_log\.[0-9]+' -print0 2>/dev/null | sort -zrV | tail -z -n +2
+    )
+
+    log "INFO: events_log 压缩完成 ${n}/${total}"
+    return 0
+}
+
+purge_events_logs() {
+    [ -d "${EVENTSLOG_DIR}" ] || return 0
+    local n
+    n=$(find "${EVENTSLOG_DIR}" -maxdepth 1 -type f -name 'events_log.*.zst' \
+            -mmin +$((LOG_KEEP_DAYS * 1440)) \
+            -print -delete 2>/dev/null | wc -l)
+    log "INFO: 清理 events_log ${n} 个(超过 ${LOG_KEEP_DAYS} 天)"
+    return 0
+}
+
+purge_backups() {
+    [ -d "${BACKUP_DIR}" ] || return 0
+    local n
+    n=$(find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${HOST}_*.sql*" \
+            ! -name '*.tmp' -mmin +$((KEEP_DAYS * 1440)) \
+            -print -delete 2>/dev/null | wc -l)
+    log "INFO: 清理过期备份 ${n} 个(超过 ${KEEP_DAYS} 天)"
+    return 0
+}
+
+main() {
+    local rc=0 value cmd lock_rc
+
+    for value in "${KEEP_DAYS}" "${LOG_KEEP_DAYS}" "${DIGEST_FLUSH_WAIT}" \
+                 "${QUERY_TIMEOUT}" "${DUMP_TIMEOUT}" "${COMPRESS_THREADS}"; do
+        [[ "${value}" =~ ^[0-9]+$ ]] || return 2
+    done
+    (( KEEP_DAYS > 0 && LOG_KEEP_DAYS > 0 && QUERY_TIMEOUT > 0 && DUMP_TIMEOUT > 0 && COMPRESS_THREADS > 0 )) || return 2
+    for cmd in mysql mysqldump timeout flock; do command -v "${cmd}" >/dev/null || return 2; done
+    mkdir -p "$(dirname "${LOG_FILE}")" || return 2
+    touch "${LOG_FILE}" || return 2
+
+    # 不向 /tmp 静默回退锁文件，否则两次运行可能锁住不同路径而并发备份。
+    exec 9>"${LOCK_FILE}" || { log "ERROR: 无法创建锁文件 ${LOCK_FILE}"; return 2; }
+    flock -n 9
+    lock_rc=$?
+    if [ "${lock_rc}" -eq 1 ]; then
+        log "WARN: 已有备份进程在运行, 本次跳过"
+        exit 0
+    fi
+    [ "${lock_rc}" -eq 0 ] || return 2
+    trap 'restore_digest || true' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    log "===== 开始 ProxySQL 备份 @ ${HOST} (${ENV_NAME}/${IPADDR}) ====="
+
+    # 配置备份优先，不让大批事件日志压缩延迟关键备份的生成。
+    select_admin_auth
+    if backup; then
+        purge_backups
+    else
+        rc=1
+        SendMessage "${MSG_TYPE}" \
+            "The Proxysql ${ENV_NAME}_${HOST}_${IPADDR} BackUp Failure! $(date '+%F %T'), see ${LOG_FILE}"
+    fi
+
+    compress_logs
+    purge_events_logs
+
+    log "===== 结束, 退出码 ${rc} ====="
+    exit "${rc}"
+}
+
+main "$@"

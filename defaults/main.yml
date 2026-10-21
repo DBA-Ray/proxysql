@@ -1,37 +1,52 @@
 ---
-# defaults file for proxysql_ray
+# ==========================================
+# 1. 基础环境与部署主机
+# ==========================================
 env: dev1
-# Which hosts to deploy
 deploy_hosts: "mysql_{{ env }}"
-# Monitor info
-message_type: weixin
-dingding_url: "1oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
-weixin_url: "1qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
-mobile: 15668661298
-# Which hosts to route
 primary_host: "mysql1_{{ env }}"
-mgr_group: "mysql_{{ env }}"
+mysql_group: "mysql_{{ env }}"
 slave_group: "slave_monitor_{{ env }}"
-# 默认启用基于组复制架构的主机角色分配策略
-#proxysql_group_replication_hostgroups: True #(如若单独启用传统复制架构，需要删除此键值，并且调整proxysql_replication_hostgroups为True)
-proxysql_replication_hostgroups: True
+proxysql_group: "proxysql_{{ env }}"
+
+# ==========================================
+# 2. 告警配置
+# ==========================================
+# dingding / weixin / none。部署生产环境前通过变量覆盖 webhook 与通知手机号。
+message_type: weixin
+dingding_url: "oapi.dingtalk.com/robot/send?access_token=f333b3f832ac4e91f7906acb35eabbb538595e440c68b69cd71a25197509d509"
+weixin_url: "qyapi.weixin.qq.com/cgi-bin/webhook/send?key=98e9b840-d24b-4fc8-8072-78a6fc41ac10"
+mobile: 15668661298
+
+# ==========================================
+# 3. 目录与安装包路径
+# ==========================================
 # Repo info
 remote_repo: https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm
+
 # 目录路径
 datadir: /data/proxysql
 errorlog: "{{ datadir }}/proxysql.log"
-package_dir: /opt/package
-backupdir: /data/backup
-eventslog_dir: /data/events_log
+package_dir: "{{ datadir }}/package"
+backupdir: "{{ datadir }}/backup"
+eventslog_dir: "{{ datadir }}/events_log"
+
+# 两个变量分别控制安装和升级；示例包名不代表版本自动选择。
+# Debian/Ubuntu 使用 .deb，RedHat 使用 .rpm；格式不匹配会在停服务前报错。
 proxysql_package: proxysql_2.6.5-ubuntu20_amd64.deb
+proxysql_upgrade_package: proxysql-2.6.1-1-centos7.x86_64.rpm
+
 db_file: "{{ datadir }}/proxysql.db"
 db_stats_file: "{{ datadir }}/proxysql_stats.db"
-proxysql_upgrade_package: proxysql-2.6.1-1-centos7.x86_64.rpm
-# 定义初始化proxysql的变量
-# admin变量
-admin_web_enabled: 'false'
+
+# ==========================================
+# 4. Admin 与 MySQL 核心变量
+# ==========================================
+# 管理端口应只允许管理网络及 ProxySQL 集群节点访问。
+admin_web_enabled: false
 admin_login_port: 6032
 admin_mysql_ifaces: "0.0.0.0:{{ admin_login_port }}"
+
 # mysql变量
 mysql_threads: 16
 mysql_interfaces: '0.0.0.0:8080'
@@ -47,30 +62,120 @@ mysql_default_charset: 'utf8mb4'
 mysql_max_connections: 12000
 mysql_server_version: '8.0.42'
 mysql_max_allowed_packet: 1072693248
-max_replication_lag: 1
-#mysql_default_sql_mode: 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 mysql_wait_timeout: 28800000
-# mysql servers变量
+
+# ==========================================
+# 5. MySQL Servers 与 集群架构配置
+# ==========================================
 mysql_port: 3307
 max_connections: 4000
-proxysql_cluster_enabled: true # If the variable is defined,it will enable the proxysql cluster(default disabled)
-# 基于组复制架构的主机角色分配策略（传统复制也可以使用）
+max_replication_lag: 1
+gtid_port: 0
+
+# 是否启用 ProxySQL 集群
+proxysql_cluster_enabled: true
+
+# 基础 Hostgroup ID 定义
 writer_hostgroup: 10
 backup_writer_hostgroup: 20
 reader_hostgroup: 30
 offline_hostgroup: 40
-group_replication_active: 0
+# 仅在 enable_group_replication=true 时生成 GR 配置；active=1 才会自动监测角色。
+# 若手动设为 0，自动路由脚本也会保持不变，等待人工恢复监控。
+group_replication_active: 1
 writer_is_also_reader: 1
 max_transactions_behind: 10000
-# mysql users变量
+
+# 🔘 架构总开关：
+# false = 传统主从复制 (Replication)
+# true  = 组复制 (Group Replication)
+enable_group_replication: false
+
+# 自动生成传统复制列表 (根据总开关决定是否为空)
+proxysql_replication_hostgroups: >-
+  {{ [] if enable_group_replication else [
+    {
+      'writer_hostgroup': writer_hostgroup,
+      'reader_hostgroup': reader_hostgroup,
+      'comment': 'replication group 1'
+    }
+  ] }}
+
+# 自动生成组复制列表 (根据总开关决定是否为空)
+proxysql_group_replication_hostgroups: >-
+  {{ [
+    {
+      'writer_hostgroup': writer_hostgroup,
+      'backup_writer_hostgroup': backup_writer_hostgroup,
+      'reader_hostgroup': reader_hostgroup,
+      'offline_hostgroup': offline_hostgroup,
+      'active': group_replication_active,
+      'writer_is_also_reader': writer_is_also_reader,
+      'max_transactions_behind': max_transactions_behind
+    }
+  ] if enable_group_replication else [] }}
+
+# ==========================================
+# 6. MySQL Users 与 Query Rules
+# ==========================================
 business_user: test1
+
+# 这些账号的所有请求（包括 SELECT）固定发送到 writer_hostgroup，不参与读写分离。
+# 默认复用现有 root、业务用户、audit 的用户名和密码，不创建同名重复记录。
+# ProxySQL 根据用户名区分账号，同名账号无法同时代表两种不同的路由策略。
+# 每项会创建原用户名和同密码的 `<username>_single` 伴随账号；原用户名保持读写分离。
+# `_single` 账号的所有请求固定到主库。每项都必须提供基础 username 和 password。
+# 示例：
+# proxysql_primary_users:
+#   - { username: report_writer, password: 'vault中的密码' }
+proxysql_primary_users:
+  - { username: root, password: "{{ root_password }}" }
+  - { username: "{{ business_user }}", password: "{{ business_password }}" }
+  - { username: audit, password: "{{ mysql_monitor_password }}" }
+# 2 是锁定读，3 是 apply=0 的普通 SELECT，4 是 global 只读账号。
+# 10..99 的用户名规则匹配 *_single 并 apply=1，终止后续匹配。
+primary_user_rule_start: 10
+
 # mysql query rules变量
-cache_ttl: 1
-# 如果定义navicat_query_rule，则表示添加适配navicat的路由规则
-navicat_query_rule: True
+cache_ttl: 0
+navicat_query_rule: true  # 启用规则时 rule_id 不得与内置的 2/3/4/100 冲突
 rule_id: 1
 active: 1
 match_digest: '^set'
 multiplex: 1
-#proxysql_binlog_reader变量
-gtid_port: 0
+
+# ==========================================
+# 7. 运行开关 / 备份 / 告警
+# ==========================================
+whether_uninstall: false
+whether_with_mysql: false
+is_upgrade: false
+proxysql_admin_user: admin
+# 天数按文件修改时间计算，必须大于 0；仅清理成功发布的备份及压缩事件日志。
+backup_keep_days: 7
+eventslog_keep_days: 7
+# 临时开启 digest 落盘后等待秒数，可设为 0；结束时恢复原 runtime 值。
+digest_flush_wait: 7
+# 额外重试次数（0 表示只发送一次），单次请求超时单位为秒。
+alert_retry: 2
+alert_timeout: 10
+backup_cron_minute: "0"
+backup_cron_hour: "*/8"
+backup_log_file: "{{ datadir }}/backup.log"
+backup_lock_file: /var/lock/proxysql_backup.lock
+uninstall_backup_root: "{{ datadir | dirname }}/proxysql_pre_uninstall"
+
+# 每条 SQL 和 mysqldump 都有独立的硬超时，避免 cron 进程永久占锁。
+# timeout 来自 coreutils；dump 大库时可按实际数据量提高此值（秒）。
+admin_query_timeout: 30
+backup_dump_timeout: 300
+
+# 压缩只用一个工作线程，避免备份时占满数据库主机的 CPU。
+eventslog_compress_threads: 1
+
+# 自动路由使用独立锁；管理查询失败、组监控关闭或全部节点离线时不改路由。
+auto_adjust_lock_file: /var/lock/proxysql_auto_adjust.lock
+auto_adjust_log_file: "{{ datadir }}/auto_adjust.log"
+
+# 升级冷备放在 datadir 外，避免误卸载或回滚时连备份一起丢失。
+upgrade_backup_root: "{{ datadir | dirname }}/proxysql_pre_upgrade"

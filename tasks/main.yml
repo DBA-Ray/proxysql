@@ -1,13 +1,15 @@
 ---
 # tasks file for proxysql_ray
-- include: password.yml
-  when: not is_upgrade | default(False)
+# 所有会停止服务、删除目录的操作之前先校验配置和安装包。
+- ansible.builtin.include_tasks: password.yml
 
-- include: system_check.yml
-  when: not is_upgrade | default(False)
+- ansible.builtin.include_tasks: preflight.yml
 
-- include: install.yml
-  when: not is_upgrade | default(False)
+- ansible.builtin.include_tasks: system_check.yml
+  when: not (is_upgrade | default(false) | bool)
 
-- include: upgrade.yml
-  when: is_upgrade | default(False)
+- ansible.builtin.include_tasks: install.yml
+  when: not (is_upgrade | default(false) | bool)
+
+- ansible.builtin.include_tasks: upgrade.yml
+  when: is_upgrade | default(false) | bool

@@ -1,0 +1,101 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# 钉钉 / 企业微信告警公共库, 由 backup.sh 与 auto_adjust_mysql_query_rules.sh source
+
+# 保留独立变量名，不覆盖调用者 readonly MSG_TYPE。所有配置按 shell 字面量转义。
+# URL 允许带或不带 https://；不再重复拼接协议头。
+NOTIFY_MSG_TYPE={{ message_type | quote }}
+DINGDING_URL={{ dingding_url | quote }}
+WEIXIN_URL={{ weixin_url | quote }}
+AT_MOBILE={{ mobile | string | quote }}
+# default(..., true) 会把合法的 0 重试替换掉，因此这里直接使用 defaults 中的值。
+ALERT_RETRY={{ alert_retry | quote }}
+ALERT_TIMEOUT={{ alert_timeout | quote }}
+
+json_escape() {
+    local s="${1:-}"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    s=${s//$'\t'/\\t}
+    s=${s//$'\r'/\\r}
+    s=${s//$'\n'/\\n}
+    s=${s//$'\b'/\\b}
+    s=${s//$'\f'/\\f}
+    printf '%s' "${s}"
+}
+
+mobiles_to_json() {
+    local mobile separator='' mobiles=()
+    IFS=, read -r -a mobiles <<<"${1:-}"
+    for mobile in "${mobiles[@]}"; do
+        mobile=${mobile//[[:space:]]/}
+        [ -n "${mobile}" ] || continue
+        printf '%s"%s"' "${separator}" "$(json_escape "${mobile}")"
+        separator=,
+    done
+}
+
+curl_post_json() {
+    local url="$1" payload="$2"
+    local attempt=1 max
+    local resp rc errcode
+
+    # 公共库也可被单独调用，不能只依赖 Ansible 的参数校验。
+    [[ "${ALERT_RETRY}" =~ ^[0-9]+$ && "${ALERT_TIMEOUT}" =~ ^[0-9]+$ ]] || return 2
+    (( ALERT_TIMEOUT > 0 )) || return 2
+    max=$((ALERT_RETRY + 1))
+    case "${url}" in
+        https://*) ;;
+        http://*) return 2 ;;
+        '') return 2 ;;
+        *) url="https://${url}" ;;
+    esac
+
+    while [ "${attempt}" -le "${max}" ]; do
+        # 将失败放在 if 中，即便调用者开启 set -e 也能完成有限重试。
+        # 错误输出不混入 JSON；不打印响应和 URL，避免将 webhook 密钥写入日志。
+        if resp=$(curl -fsS --max-time "${ALERT_TIMEOUT}" --connect-timeout 5 \
+                    -H 'Content-Type: application/json' \
+                    -d "${payload}" "${url}" 2>/dev/null); then
+            rc=0
+        else
+            rc=$?
+        fi
+        if [ "${rc}" -eq 0 ]; then
+            errcode=$(printf '%s' "${resp}" \
+                      | sed -n 's/.*"errcode"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9]\{1,\}\).*/\1/p')
+            if [ "${errcode}" = "0" ]; then
+                return 0
+            fi
+        fi
+        if [ "${attempt}" -lt "${max}" ]; then
+            sleep "$((attempt * 2))"
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+send_dingding() {
+    local payload
+    payload=$(printf '{"msgtype":"text","text":{"content":"%s"},"at":{"atMobiles":[%s],"isAtAll":false}}' \
+              "$(json_escape "${1:-}")" "$(mobiles_to_json "${AT_MOBILE}")")
+    curl_post_json "${DINGDING_URL}" "${payload}"
+}
+
+send_weixin() {
+    local payload
+    payload=$(printf '{"msgtype":"text","text":{"content":"%s","mentioned_mobile_list":[%s]}}' \
+              "$(json_escape "${1:-}")" "$(mobiles_to_json "${AT_MOBILE}")")
+    curl_post_json "${WEIXIN_URL}" "${payload}"
+}
+
+SendMessage() {
+    case "${1:-${NOTIFY_MSG_TYPE}}" in
+        dingding) send_dingding "${2:-}" ;;
+        weixin)   send_weixin   "${2:-}" ;;
+        none|'')  return 0 ;;
+        *)        return 2 ;;
+    esac
+}
+

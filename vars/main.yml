@@ -16,6 +16,21 @@ packages:
   - zstd
   - epel-release
   - python-pip
+  - curl
+  - util-linux  # flock，防止定时任务重叠
+  - coreutils  # timeout/stat/sort，限制运行时间并检查日志文件稳定性
 
-vars_files:
-  - secrets.yml
+packages_debian:
+  - vim
+  - lrzsz
+  - telnet
+  - net-tools
+  - tree
+  - unzip
+  - numactl
+  - expect
+  - zstd
+  - python3-pymysql
+  - curl
+  - util-linux
+  - coreutils

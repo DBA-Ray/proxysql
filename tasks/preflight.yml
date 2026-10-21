@@ -1,0 +1,149 @@
+---
+# 这里只做检查，不修改远端服务。错误的包格式、路径或主机名必须在停机前暴露。
+- name: Validate supported platform and operating mode
+  ansible.builtin.assert:
+    that:
+      - ansible_service_mgr == 'systemd'
+      - ansible_os_family in ['RedHat', 'Debian']
+      - not ((is_upgrade | bool) and (whether_uninstall | bool))
+      - admin_login_port | int > 0 and admin_login_port | int < 65536
+      - mysql_port | int > 0 and mysql_port | int < 65536
+      - proxysql_admin_user is match('^[A-Za-z0-9_]+$')
+      - mysql_monitor_username is match('^[A-Za-z0-9_]+$')
+      - writer_hostgroup | int >= 0
+      - reader_hostgroup | int >= 0
+      - writer_hostgroup | int != reader_hostgroup | int
+      - writer_hostgroup | int != 100 and reader_hostgroup | int != 100
+      - business_user not in ['root', 'global', 'audit']
+      - not (navicat_query_rule | bool) or (rule_id | int > 0 and rule_id | int not in [2, 3, 4, 100])
+      - primary_user_rule_start | int >= 10
+      - (primary_user_rule_start | int + (proxysql_primary_users | length)) <= 100
+      - (proxysql_primary_users | map(attribute='username') | unique | length) == (proxysql_primary_users | length)
+      - not (navicat_query_rule | bool) or (rule_id | int < 10 or rule_id | int >= 100)
+    fail_msg: '需要 Linux/systemd、有效端口和不同的读写组；升级与卸载不能同时启用。'
+
+- name: Validate primary-only user definitions
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.username is defined
+      - item.password is defined
+      - item.username is match('^[A-Za-z0-9_]+$')
+      - item.username not in [proxysql_admin_user, mysql_monitor_username, 'global']
+      - not item.username.endswith('_single')
+      - (item.username ~ '_single') not in [proxysql_admin_user, mysql_monitor_username, 'global']
+      - (item.username | length + 7) <= 64
+      - item.password | string | length > 0
+    fail_msg: 'proxysql_primary_users 中存在无效的用户名或密码。'
+  loop: "{{ proxysql_primary_users | default([]) }}"
+  no_log: true
+
+- name: Validate hostgroup IDs before using them in SQL
+  ansible.builtin.assert:
+    that:
+      - (item | string) is match('^(0|[1-9][0-9]*)$')
+  loop:
+    - "{{ writer_hostgroup }}"
+    - "{{ reader_hostgroup }}"
+    - "{{ backup_writer_hostgroup }}"
+    - "{{ offline_hostgroup }}"
+    - "{{ admin_login_port }}"
+    - "{{ mysql_port }}"
+
+# 路径还会用于 cron、systemd 和清理操作。拒绝根目录、路径穿越及 shell 元字符。
+# 统一限制为无空格绝对路径，可以避免这些组件各自不同的转义规则。
+- name: Validate filesystem paths
+  ansible.builtin.assert:
+    that:
+      - item is match('^/[A-Za-z0-9_./-]+$')
+      - "'..' not in item.split('/')"
+      - "'.' not in item.split('/')"
+      - "'//' not in item"
+      - not item.endswith('/')
+      - "item.rstrip('/') not in ['', '/data', '/var', '/var/lib', '/etc', '/usr', '/tmp', '/home', '/root', '/opt', '/srv']"
+    fail_msg: '目录或文件路径无效：{{ item }}'
+  loop:
+    - "{{ datadir }}"
+    - "{{ package_dir }}"
+    - "{{ backupdir }}"
+    - "{{ eventslog_dir }}"
+    - "{{ db_file }}"
+    - "{{ db_stats_file }}"
+    - "{{ backup_log_file }}"
+    - "{{ backup_lock_file }}"
+    - "{{ auto_adjust_lock_file }}"
+    - "{{ auto_adjust_log_file }}"
+    - "{{ errorlog }}"
+    - "{{ uninstall_backup_root }}"
+    - "{{ upgrade_backup_root }}"
+
+- name: Keep recovery copies outside the removable data directory
+  ansible.builtin.assert:
+    that:
+      - not uninstall_backup_root.startswith(datadir.rstrip('/') + '/')
+      - uninstall_backup_root.rstrip('/') != datadir.rstrip('/')
+      - not upgrade_backup_root.startswith(datadir.rstrip('/') + '/')
+      - upgrade_backup_root.rstrip('/') != datadir.rstrip('/')
+      - backupdir.rstrip('/') != eventslog_dir.rstrip('/')
+      - db_file == datadir.rstrip('/') + '/proxysql.db'
+      - db_stats_file == datadir.rstrip('/') + '/proxysql_stats.db'
+      - ([backup_log_file, auto_adjust_log_file, errorlog, backup_lock_file, auto_adjust_lock_file, db_file, db_stats_file] | unique | length) == 7
+    fail_msg: '恢复备份必须放在 datadir 外；db_file 必须与 ProxySQL 实际使用的数据库路径一致。'
+
+- name: Validate retention and timeout values
+  ansible.builtin.assert:
+    that:
+      - (item | string) is match('^(0|[1-9][0-9]*)$')
+    fail_msg: '保留天数、重试次数和超时必须为非负整数。'
+  loop:
+    - "{{ backup_keep_days }}"
+    - "{{ eventslog_keep_days }}"
+    - "{{ digest_flush_wait }}"
+    - "{{ alert_retry }}"
+    - "{{ alert_timeout }}"
+    - "{{ admin_query_timeout }}"
+    - "{{ backup_dump_timeout }}"
+    - "{{ eventslog_compress_threads }}"
+
+- name: Require positive retention and bounded command execution
+  ansible.builtin.assert:
+    that:
+      - backup_keep_days | int > 0
+      - eventslog_keep_days | int > 0
+      - alert_timeout | int > 0
+      - admin_query_timeout | int > 0
+      - backup_dump_timeout | int > 0
+      - eventslog_compress_threads | int > 0
+      - not (enable_group_replication | bool) or ([writer_hostgroup | int, backup_writer_hostgroup | int, reader_hostgroup | int, offline_hostgroup | int] | unique | length == 4)
+
+- name: Select package for this operation
+  ansible.builtin.set_fact:
+    proxysql_selected_package: "{{ proxysql_upgrade_package if is_upgrade | bool else proxysql_package }}"
+
+- name: Check package name and OS compatibility
+  ansible.builtin.assert:
+    that:
+      - proxysql_selected_package == proxysql_selected_package | basename
+      - proxysql_selected_package is match('^[A-Za-z0-9][A-Za-z0-9_.+-]+$')
+      - proxysql_selected_package.endswith('.deb' if ansible_os_family == 'Debian' else '.rpm')
+    fail_msg: '请在 files/ 中提供目标系统对应的 deb/rpm 安装包，并设置正确包名。'
+
+- name: Check package on Ansible controller before downtime
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ proxysql_selected_package }}"
+  delegate_to: localhost
+  become: false
+  register: proxysql_local_package
+
+- name: Require a regular local package file
+  ansible.builtin.assert:
+    that:
+      - proxysql_local_package.stat.isreg | default(false)
+
+# hostvars 的网络 facts 不一定已收集；优先使用 inventory 中显式指定的地址。
+- name: Validate primary host for replication deployments
+  ansible.builtin.assert:
+    that:
+      - primary_host in groups[mysql_group] | default([])
+    fail_msg: 'primary_host 必须属于 mysql_group。'
+  when: not (enable_group_replication | bool) and not (is_upgrade | bool)

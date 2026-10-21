@@ -1,11 +1,17 @@
-# 安装proxysql并初始化
-- name: Copy the mysql-community.repo(redhat)
+# 安装和重复部署共用此流程。已有 proxysql.db 时配置来自数据库，
+# 渲染 cnf 不会覆盖运行时配置；禁止通过 --initial 强制重建数据库。
+- name: Check existing ProxySQL database before package installation
+  ansible.builtin.stat:
+    path: "{{ db_file }}"
+  register: proxysql_existing_db
+
+- name: Copy the mysql-community.repo
   copy: src=mysql-community.repo dest=/etc/yum.repos.d/mysql-community.repo
   when:
     - ansible_os_family == "RedHat"
-    - not whether_with_mysql
+    - not (whether_with_mysql | default(false) | bool)
 
-- name: Install mysql client(redhat)
+- name: Install mysql client
   yum:
     name: mysql-community-client.x86_64
     state: present
@@ -14,27 +20,31 @@
   until: result is succeeded
   when:
     - ansible_os_family == "RedHat"          
-    - not whether_with_mysql
+    - not (whether_with_mysql | default(false) | bool)
 
-- name: apt update(debian)
+- name: apt update
   ansible.builtin.apt:
     update_cache: true
-    cache_valid_time: 0
+    cache_valid_time: 3600
+  register: apt_update
   retries: 3
-  until: result is succeeded
+  delay: 5
+  until: apt_update is succeeded
   when:
     - ansible_os_family == "Debian"
-    - not whether_with_mysql
+    - not (whether_with_mysql | default(false) | bool)
 
-- name: apt install mysql-client(debian)
+- name: apt install mysql-client
   ansible.builtin.apt:
     name: mysql-client
     state: present
+  register: mysql_client_install
   retries: 3
-  until: result is succeeded
+  delay: 5
+  until: mysql_client_install is succeeded
   when:
     - ansible_os_family == "Debian"
-    - not whether_with_mysql
+    - not (whether_with_mysql | default(false) | bool)
 
 - name: Ensure group "proxysql" exists
   group:
@@ -50,7 +60,9 @@
   file: path={{ item }} state=directory owner=proxysql group=proxysql
   with_items:
     - "{{ datadir }}"
+    - "{{ package_dir }}"
     - "{{ eventslog_dir }}"
+    - "{{ backupdir }}"
 
 - name: Copy the installation package
   copy:
@@ -59,34 +71,27 @@
   with_items:
     - { src: "{{ proxysql_package }}", dest: "{{ package_dir }}" }
 
-- name: Rendering mysql_config_editor.sh
-  template:
-    src: mysql_config_editor.sh.j2
-    dest: "{{ package_dir }}/mysql_config_editor.sh"
-    owner: root
-    group: root
-    mode: 0774
-
-#- name: Case sensitive password string match for logining proxysql
-#  shell: "/usr/bin/expect {{ package_dir }}/mysql_config_editor.sh"
-
+# 直接通过 expect 设置 login-path，不再向磁盘写入包含明文密码的 expect 脚本。
 - name: Case sensitive password string match for logining proxysql
   expect:
-    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P 6032 --user=admin --password
+    command: mysql_config_editor set --login-path=proxysql --host=127.0.0.1 -P {{ admin_login_port }} --user={{ proxysql_admin_user }} --password
     responses:
       (?i)password: "{{ admin_login_password }}"
       (?i)Continue: y
-    echo: yes
+    echo: no
   no_log: True
 
-- name: Add the job of logrotate for proxysql
-  cron:
-    name: "proxysql logrotate"
-    minute: "55"
-    hour: "23"
-    job: "/usr/sbin/logrotate -vf -s /var/lib/logrotate/logrotate.status /etc/logrotate.d/proxysql > /dev/null 2>&1 &"
+- name: Remove legacy plaintext credential helper
+  ansible.builtin.file:
+    path: "{{ package_dir }}/mysql_config_editor.sh"
+    state: absent
 
-- name: Install ProxySQL(Redhat)
+- name: Remove redundant forced logrotate cron
+  ansible.builtin.cron:
+    name: "proxysql logrotate"
+    state: absent
+
+- name: Install ProxySQL(redhat)
   yum:
     name: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
@@ -95,36 +100,19 @@
 
 - name: Install ProxySQL(debian)
   ansible.builtin.apt:
-    name: "{{ package_dir }}/{{ proxysql_package }}"
+    deb: "{{ package_dir }}/{{ proxysql_package }}"
     state: present
+    policy_rc_d: 101
   when:
     - ansible_os_family == "Debian"
 
-- name: Rendering scheudler file
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: proxysql
-    group: proxysql
-    mode: 0774
-  with_items:
-    - { src: 'auto_adjust_mysql_query_rules.sh.j2', dest: "{{ datadir }}/auto_adjust_mysql_query_rules.sh" }
-    - { src: 'backup.sh.j2', dest: "{{ datadir }}/backup.sh" }
-#    - { src: 'send_error_log.sh.j2', dest: "{{ datadir }}/send_error_log.sh" }
-
-- name: Add the job of sending error log for proxysql
-  cron:
-    name: "proxysql send log in the morning"
-    minute: "55"
-    hour: "08"
-    job: "{{ datadir }}/send_error_log.sh > /dev/null 2>&1 &"
-
-- name: Add the job of sending error log for proxysql
-  cron:
-    name: "proxysql send log in the afternoon"
-    minute: "55"
-    hour: "16"
-    job: "{{ datadir }}/send_error_log.sh > /dev/null 2>&1 &"
+- name: Remove obsolete send_error_log cron jobs
+  ansible.builtin.cron:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - "proxysql send log in the morning"
+    - "proxysql send log in the afternoon"
 
 - name: Rendering proxysql profile
   template:
@@ -132,6 +120,7 @@
     dest: "{{ item.dest }}"
     owner: proxysql
     group: proxysql
+    mode: '0640'
   with_items:
     - { src: 'proxysql.cnf.j2', dest: '/etc/proxysql.cnf' }
 
@@ -144,11 +133,29 @@
   with_items:
     - { src: 'proxysql', dest: '/etc/logrotate.d/proxysql' }
 
-- name: Modify proxysql.service file
-  lineinfile:
-    dest: /etc/systemd/system/proxysql.service
-    regexp: "PIDFile=/var/lib/proxysql/proxysql.pid"
-    line: "PIDFile={{ datadir }}/proxysql.pid"
+# 首次安装时，包可能已用发行版默认 datadir 启动；只在首次初始化时停止。
+# 重复运行 Role 时不无条件中断已有业务；修改 datadir 需单独安排迁移窗口。
+- name: Stop ProxySQL if package installer auto-started it
+  ansible.builtin.systemd:
+    name: proxysql
+    state: stopped
+  when: not proxysql_existing_db.stat.exists
+
+- name: Ensure systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/proxysql.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install systemd drop-in for custom datadir
+  ansible.builtin.template:
+    src: proxysql.service.override.conf.j2
+    dest: /etc/systemd/system/proxysql.service.d/override.conf
+    owner: root
+    group: root
+    mode: '0644'
 
 - name: Daemon reload proxysql server
   systemd:
@@ -165,22 +172,55 @@
     state: started
 
 - name: Wait for ProxySQL is running
-  pause: seconds=3
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ admin_login_port }}"
+    timeout: 60
+
+# 先尝试目标凭据，成功则重复部署继续使用它；失败时仅在新库初始化中
+# 回退到安装包默认 admin/admin。已有数据库认证失败时必须停止，不能重置密码。
+- name: Probe configured administrator credentials
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "{{ admin_query_timeout }}"
+      - mysql
+      - --protocol=TCP
+      - --host=127.0.0.1
+      - "--port={{ admin_login_port }}"
+      - "--user={{ proxysql_admin_user }}"
+      - --connect-timeout=5
+      - --execute=SELECT 1
+  environment:
+    MYSQL_PWD: "{{ admin_login_password }}"
+  register: proxysql_admin_probe
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Refuse to reset credentials of an existing database
+  ansible.builtin.assert:
+    that:
+      - proxysql_admin_probe.rc == 0 or not proxysql_existing_db.stat.exists
+    fail_msg: '已有数据库的管理员认证失败；请确认密码、端口及服务使用的 datadir。'
 
 - name: Modify admin password and cluster password
-  proxysql_global_variables:
-    login_user: 'admin'
-    login_password: 'admin'
+  community.proxysql.proxysql_global_variables:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user if proxysql_admin_probe.rc == 0 else 'admin' }}"
+    login_password: "{{ admin_login_password if proxysql_admin_probe.rc == 0 else 'admin' }}"
     variable: "{{ item.variable }}"
     value: "{{ item.value }}"
     load_to_runtime: True
     save_to_disk: True
   with_items:
-    - { variable: 'admin-admin_credentials', value: "admin:{{ admin_login_password }};repl:{{ mysql_monitor_password }}" }
+    - { variable: 'admin-admin_credentials', value: "{{ proxysql_admin_user }}:{{ admin_login_password }};{{ mysql_monitor_username }}:{{ mysql_monitor_password }}" }
+  no_log: true
     
 - name: Modify mysql-monitor password
-  proxysql_global_variables:
-    login_user: 'admin'
+  community.proxysql.proxysql_global_variables:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
     variable: "{{ item.variable }}"
     value: "{{ item.value }}"
@@ -189,14 +229,16 @@
   with_items:
     - { variable: 'mysql-monitor_password', value: "{{ mysql_monitor_password }}" }
     - { variable: 'admin-cluster_password', value: "{{ mysql_monitor_password }}" }
+  no_log: true
 
 - name: Add mysql_users
-  proxysql_mysql_users:
-    login_user: 'admin'
+  community.proxysql.proxysql_mysql_users:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
     username: "{{ item.username }}"
     password: "{{ item.password }}"
-    default_hostgroup: 10
+    default_hostgroup: "{{ writer_hostgroup }}"
     transaction_persistent: yes
     max_connections: 10000
     state: present
@@ -206,10 +248,12 @@
     - { username: 'root', password: "{{ root_password }}" }
     - { username: "{{ business_user }}", password: "{{ business_password }}" }
     - { username: 'audit', password: "{{ mysql_monitor_password }}" }
+  no_log: true
 
 - name: Add mysql_users(read_only)
-  proxysql_mysql_users:
-    login_user: 'admin'
+  community.proxysql.proxysql_mysql_users:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
     username: "{{ item.username }}"
     password: "{{ item.password }}"
@@ -221,22 +265,78 @@
     save_to_disk: yes
   with_items:
     - { username: 'global', password: "{{ read_only_password }}" }
+  no_log: true
+
+# 原用户名保持默认读写分离；为每个原用户名创建同密码的 *_single 伴随账号。
+# SELECT 规则 3 的 apply=0 允许继续匹配；用户名规则覆盖目标并以 apply=1 结束。
+- name: Add mysql_users (primary read-write only)
+  community.proxysql.proxysql_mysql_users:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
+    login_password: "{{ admin_login_password }}"
+    username: "{{ item.username }}_single"
+    password: "{{ item.password }}"
+    default_hostgroup: "{{ writer_hostgroup }}"
+    transaction_persistent: yes
+    max_connections: 10000
+    state: present
+    load_to_runtime: yes
+    save_to_disk: yes
+  loop: "{{ proxysql_primary_users | default([]) }}"
+  no_log: true
+
+# 已有 proxysql.db 时 cnf 不会被重新解析，因此必须同时同步管理库及 runtime/disk。
+# cache_ttl=0 清除通用 SELECT 规则可能设置的缓存，确保 *_single 确实访问主库。
+- name: Route primary-only users to writer and stop further rule matching
+  community.proxysql.proxysql_query_rules:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
+    login_password: "{{ admin_login_password }}"
+    rule_id: "{{ primary_user_rule_start | int + primary_user_index }}"
+    active: true
+    username: "{{ item.username }}_single"
+    destination_hostgroup: "{{ writer_hostgroup }}"
+    cache_ttl: 0
+    apply: true
+    state: present
+    load_to_runtime: true
+    save_to_disk: true
+  loop: "{{ proxysql_primary_users | default([]) }}"
+  loop_control:
+    index_var: primary_user_index
+  no_log: true
 
 - name: Encrypt mysql_users
-  proxysql_manage_config:
-    login_user: 'admin'
+  community.proxysql.proxysql_manage_config:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
     action: "SAVE"
     config_settings: "MYSQL USERS"
     direction: "FROM"
     config_layer: "RUNTIME"
   tags: manage_user
+  no_log: true
+
+# FROM RUNTIME 只更新内存配置，再保存到 DISK 才能在重启后保留运行时的用户数据。
+- name: Persist runtime user configuration
+  community.proxysql.proxysql_manage_config:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
+    login_password: "{{ admin_login_password }}"
+    action: SAVE
+    config_settings: MYSQL USERS
+    direction: TO
+    config_layer: DISK
+  no_log: true
+  tags: manage_user
 
 - name: Delete the reader hostgroup id of primary host
-  proxysql_backend_servers:
-    login_user: 'admin'
+  community.proxysql.proxysql_backend_servers:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
-    hostname: "{{ hostvars[primary_host]['ansible_default_ipv4']['address'] }}"
+    hostname: "{{ hostvars[primary_host].get('ansible_host', hostvars[primary_host].get('ansible_ssh_host', hostvars[primary_host].get('ansible_default_ipv4', {}).get('address', primary_host))) }}"
     hostgroup_id: "{{ reader_hostgroup }}"
     max_connections: "{{ max_connections }}"
     compression: 1
@@ -244,12 +344,14 @@
     state: absent
     load_to_runtime: True
     save_to_disk: True  
+  when: not (enable_group_replication | bool)
 
 - name: Add the writer hostgroup id of primary host
-  proxysql_backend_servers:
-    login_user: 'admin'
+  community.proxysql.proxysql_backend_servers:
+    login_port: "{{ admin_login_port }}"
+    login_user: "{{ proxysql_admin_user }}"
     login_password: "{{ admin_login_password }}"
-    hostname: "{{ hostvars[primary_host]['ansible_default_ipv4']['address'] }}"
+    hostname: "{{ hostvars[primary_host].get('ansible_host', hostvars[primary_host].get('ansible_ssh_host', hostvars[primary_host].get('ansible_default_ipv4', {}).get('address', primary_host))) }}"
     hostgroup_id: "{{ writer_hostgroup }}"
     max_connections: "{{ max_connections }}"
     compression: 1
@@ -257,25 +359,11 @@
     state: present
     load_to_runtime: True
     save_to_disk: True  
+  when: not (enable_group_replication | bool)
 
-- name: Add proxysql scheduler for auto adjust query rules
-  proxysql_scheduler:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    active: 0
-    interval_ms: 3000
-    filename: "{{ datadir }}/auto_adjust_mysql_query_rules.sh"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
+- name: Verify final administrative and backend readiness
+  ansible.builtin.include_tasks: readiness.yml
 
-- name: Add proxysql scheduler for backup
-  proxysql_scheduler:
-    login_user: 'admin'
-    login_password: "{{ admin_login_password }}"
-    active: 1
-    interval_ms: 28800000
-    filename: "{{ datadir }}/backup.sh"
-    state: present
-    load_to_runtime: True
-    save_to_disk: True
+# 初始化及基础就绪检查完成后才注册定时任务，避免 cron 抢先运行。
+- name: Deploy maintenance scripts and schedules
+  ansible.builtin.include_tasks: maintenance.yml

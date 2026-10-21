@@ -1,0 +1,42 @@
+---
+# 安装、升级共用同一套脚本，确保升级后不会继续运行旧版本的维护逻辑。
+- name: Check commands required by maintenance jobs
+  ansible.builtin.shell: |
+    for cmd in bash mysql mysqldump timeout flock curl zstd; do
+      command -v "$cmd" >/dev/null || exit 1
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Render maintenance scripts with shell syntax validation
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ datadir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: '0700'
+    validate: '/bin/bash -n %s'
+  loop:
+    - { src: 'notify.sh.j2', dest: 'notify.sh' }
+    - { src: 'backup.sh.j2', dest: 'backup.sh' }
+    - { src: 'auto_adjust_mysql_query_rules.sh.j2', dest: 'auto_adjust_mysql_query_rules.sh' }
+  # 脚本中含管理员密码，禁止 Ansible diff 或异常回显渲染内容。
+  no_log: true
+  diff: false
+
+- name: Cron - ProxySQL backup
+  ansible.builtin.cron:
+    name: proxysql backup
+    user: root
+    minute: "{{ backup_cron_minute }}"
+    hour: "{{ backup_cron_hour }}"
+    job: "{{ datadir }}/backup.sh >/dev/null 2>&1"
+
+- name: Cron - GR auto adjust query rules
+  ansible.builtin.cron:
+    name: proxysql auto adjust query rules
+    user: root
+    minute: '*'
+    job: "{{ datadir }}/auto_adjust_mysql_query_rules.sh >/dev/null 2>&1"
+    state: "{{ 'present' if enable_group_replication | bool else 'absent' }}"

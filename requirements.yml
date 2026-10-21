@@ -1,0 +1,4 @@
+---
+# 控制端依赖；目标机还需 PyMySQL/MySQLdb、mysql 客户端及 coreutils 等系统包。
+collections:
+  - name: community.proxysql

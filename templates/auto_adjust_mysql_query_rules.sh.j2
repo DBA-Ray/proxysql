@@ -1,142 +1,133 @@
 #!/bin/bash
+# {{ ansible_managed }}
+# GR 读路由维护：仅调整指定组的 writer_is_also_reader，不停用监控或查询规则。
+# 返回码：0=无需调整/调整成功/并发跳过，1=查询或调整失败，2=环境异常。
+set -u
+set -o pipefail
+umask 077
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
 
-#Author DBA Ray
+readonly ADMIN_PASSWORD={{ admin_login_password | quote }}
+readonly ADMIN_USER={{ proxysql_admin_user | quote }}
+readonly ADMIN_PORT={{ admin_login_port | quote }}
+readonly QUERY_TIMEOUT={{ admin_query_timeout | quote }}
+readonly WRITER={{ writer_hostgroup | int | quote }}
+readonly READER={{ reader_hostgroup | int | quote }}
+readonly BACKUP_WRITER={{ backup_writer_hostgroup | int | quote }}
+readonly OFFLINE={{ offline_hostgroup | int | quote }}
+readonly LOG_FILE={{ auto_adjust_log_file | quote }}
+readonly LOCK_FILE={{ auto_adjust_lock_file | quote }}
+readonly NOTIFY_LIB={{ (datadir ~ '/notify.sh') | quote }}
+readonly MSG_TYPE={{ message_type | quote }}
 
-source /etc/profile
-
-export MYSQL_PWD="{{ admin_login_password }}"
-
-proxysql_cmd="mysql -u admin -h 127.0.0.1 -P6032 --prompt='Admin> ' --default-auth=mysql_native_password"
-
-## 发送消息方法
-function SendMessage()
-
-{
-
-dingding_url="https://{{ dingding_url }}"
-
-#向钉钉发送消息方法
-function SendMessageToDingding()
-{ 
-curl "${dingding_url}" -H 'Content-Type: application/json' -d "
- { \"msgtype\":\"text\",
-\"text\":{
-\"content\":\"${1}\"},
-\"at\":{
-\"atMobiles\":[\"{{ mobile }}\"],
-\"isAtAll\":false} }"
+log() {
+    printf '%s [%s] %s\n' "$(date '+%F %T')" "$$" "$*" | tee -a "${LOG_FILE}"
 }
 
-weixin_url="https://{{ weixin_url }}"
-
-#向微信发送消息方法
-function SendMessageToWeixin()
-{
-cat > sendweb.sh<< EOF
-    curl "${weixin_url}" \
-   -H 'Content-Type: application/json' \
-   -d '
-   {
-        "msgtype": "text",
-        "text": {
-            "content": "${1}",
-            "mentioned_mobile_list":["{{ mobile }}"]
-        }
-   }'
-EOF
-sh sendweb.sh && rm -rf sendweb.sh
+# 不使用字符串拼接命令，不把密码放在命令行中；连接和整条 SQL 都有超时。
+mysql_admin() {
+    MYSQL_PWD="${ADMIN_PASSWORD}" timeout --kill-after=5 "${QUERY_TIMEOUT}" \
+        mysql --protocol=TCP --host=127.0.0.1 --port="${ADMIN_PORT}" \
+        --user="${ADMIN_USER}" --connect-timeout=5 --batch --skip-column-names "$@"
 }
 
-if [ ${1} == "dingding" ]
-
-then SendMessageToDingding "${2}"
-
-elif [ ${1} == "weixin" ]
-
-then SendMessageToWeixin "${2}"
-
-else echo "未设置发送消息方式"
-
-fi
-
+alert() {
+    log "ERROR: $*"
+    if [ -f "${NOTIFY_LIB}" ]; then
+        # shellcheck source=/dev/null
+        . "${NOTIFY_LIB}"
+        SendMessage "${MSG_TYPE}" "$*" || log 'WARN: 告警发送失败'
+    fi
 }
 
-function auto_adjust_mysql_query_rules() {
+auto_adjust_mysql_query_rules() {
+    local row mode active total unavailable readers writers extra desired result
+    # 同一个端点可能同时在 writer/reader 中，按 hostname+port 去重。
+    # backup_writer、offline 中的 ONLINE 行也不等于可承担读请求的节点。
+    # 从一次查询读取所有判断指标，避免多次查询拼接出互不一致的观察结果。
+    if ! row=$(mysql_admin -e "
+        SELECT g.writer_is_also_reader, g.active,
+          (SELECT COUNT(*) FROM (SELECT hostname, port FROM runtime_mysql_servers
+           WHERE hostgroup_id IN (${WRITER},${READER},${BACKUP_WRITER},${OFFLINE})
+           GROUP BY hostname, port)),
+          (SELECT COUNT(*) FROM (SELECT hostname, port FROM runtime_mysql_servers
+           WHERE hostgroup_id IN (${WRITER},${READER},${BACKUP_WRITER},${OFFLINE})
+           GROUP BY hostname, port HAVING MAX(CASE WHEN status='ONLINE'
+           AND hostgroup_id IN (${WRITER},${READER}) THEN 1 ELSE 0 END)=0)),
+          (SELECT COUNT(*) FROM runtime_mysql_servers r WHERE r.hostgroup_id=${READER}
+           AND r.status='ONLINE' AND NOT EXISTS (SELECT 1 FROM runtime_mysql_servers w
+           WHERE w.hostgroup_id=${WRITER} AND w.status='ONLINE'
+           AND w.hostname=r.hostname AND w.port=r.port)),
+          (SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id=${WRITER} AND status='ONLINE')
+        FROM mysql_group_replication_hostgroups g WHERE g.writer_hostgroup=${WRITER}
+          AND g.reader_hostgroup=${READER} AND g.backup_writer_hostgroup=${BACKUP_WRITER}
+          AND g.offline_hostgroup=${OFFLINE};
+    "); then
+        alert 'GR 状态查询失败，保持现有路由和监控'; return 1
+    fi
 
-c=2
+    # read 会忽略额外换行，因此先验证整行格式：必须恰好六列非负整数。
+    # 拒绝空结果、多组结果及非数值，不能让 shell 把空值当成 0 来调整路由。
+    if [[ ! "${row}" =~ ^[0-9]+[[:blank:]][0-9]+[[:blank:]][0-9]+[[:blank:]][0-9]+[[:blank:]][0-9]+[[:blank:]][0-9]+$ ]]; then
+        alert 'GR 状态结果无效，保持现有配置'; return 1
+    fi
+    read -r mode active total unavailable readers writers extra <<<"${row}"
+    if (( active == 0 )); then
+        log 'INFO: 此组监控已由管理员禁用，跳过自动调整'; return 0
+    fi
+    if (( active != 1 || mode > 2 || total == 0 || unavailable > total )); then
+        alert 'GR 状态值越界或没有后端节点，跳过调整'; return 1
+    fi
+    if (( unavailable == total || writers == 0 )); then
+        # 必须保持 GR 监控运行，节点恢复后才能自动重新判定角色。
+        alert 'GR 全部节点不可用或没有在线写节点，请检查集群；保留监控'; return 1
+    fi
+    if (( mode == 2 )); then
+        log 'INFO: writer_is_also_reader=2 为人工配置策略，保持不变'; return 0
+    fi
 
-#查询离线节点总数
-offline_mysql_count=`${proxysql_cmd} \
--e "select count(distinct(a.hostname)) as count_offline_mysql from runtime_mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.offline_hostgroup or a.hostgroup_id=b.backup_writer_hostgroup or (a.status <> 'ONLINE' and (a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup))\G;"\
- | grep count_offline_mysql: | awk '{ printf $2 }'`
+    desired=0
+    # 没有独立可读副本时必须允许主节点读，否则单节点集群会读到空组。
+    if (( unavailable * 2 >= total || readers == 0 )); then desired=1; fi
+    if (( desired == mode )); then return 0; fi
 
-#查询主节点可读是否启用
-query_active=`${proxysql_cmd} \
--e "select writer_is_also_reader from mysql_group_replication_hostgroups\G;"\
- | grep writer_is_also_reader: | awk '{ printf $2 }'`
-
-#如果离线节点总数大于0或者主节点可读启用,那么认为不正常
-if [[ ${offline_mysql_count} -gt 0 || ${query_active} -ne 0 ]] ; then
-
-   #查询节点总数
-   mysql_count=`${proxysql_cmd} \
--e "select count(distinct(hostname)) as count_mysql from mysql_servers a join mysql_group_replication_hostgroups b on a.hostgroup_id=b.writer_hostgroup or a.hostgroup_id=b.reader_hostgroup\G;"\
- | grep count_mysql: | awk '{ printf $2 }'`
-   
-   #如果离线节点的总数乘以2大于节点总数并且主节点可读未启用
-   if [[ `expr ${offline_mysql_count} \* $c` -ge ${mysql_count} && ${query_active} -eq 0 ]] ; then
-
-   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will adjust the read requests to the primary\nbecause the number of offline MySQL is more than or equal to half!"
-
-   ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/primary_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
-   
-   #调整部分读请求到主节点
-   ${proxysql_cmd} \
--e "update mysql_group_replication_hostgroups set writer_is_also_reader=1;load mysql servers to runtime;save mysql servers to disk;"
-
-   #如果离线节点的总数乘以2小于节点总数并且主节点可读启用了
-   elif [[ `expr ${offline_mysql_count} \* $c` -lt ${mysql_count} && ${query_active} -ne 0 ]] ; then
-
-   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will remove the read requests from the primary\nbecause the number of offline MySQL is less than half!"
-   
-   ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/normal_mysql_servers_`date +%Y%m%d%H%M%S`.log 
-
-   #调整主节点上的读请求到副节点
-   ${proxysql_cmd} \
--e "update mysql_group_replication_hostgroups set writer_is_also_reader=0;load mysql servers to runtime;save mysql servers to disk;"
-
-   #如果离线节点总数等于节点总数
-   elif [[ ${offline_mysql_count} == ${mysql_count} ]] ; then
-
-   ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/discard_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
-
-   SendMessage "{{ message_type }}" "The {{ env }}_{{ ansible_hostname }}_{{ ansible_default_ipv4.address }} will discard group replication monitoring.Please pay attention."
-
-   #禁用调度工作
-   ${proxysql_cmd} \
--e "update scheduler set active=0;load scheduler to runtime;save scheduler to disk;"   
-
-   #禁用组复制状态监控,让所有节点恢复到初始角色
-   ${proxysql_cmd} \
--e "update mysql_group_replication_hostgroups set active=0;load mysql servers to runtime;save mysql servers to disk;"
-
-   #禁用读路由,保持数据一致性
-   ${proxysql_cmd} \
--e "update mysql_query_rules set active=0 where match_digest='^select.*from';load mysql query rules to runtime;save mysql query rules to disk;"
-
-   else 
-
-   #其他情况比如离线节点没有过半数并且读路由是启用的状态,读取当前节点状态记录
-   ${proxysql_cmd} \
--e "select * from runtime_mysql_servers;" > {{ datadir }}/other_abnormal_mysql_servers_`date +%Y%m%d%H%M%S`.log
-
-   fi
-
-fi
-
+    # 限定目标组及观察到的旧值，避免覆盖其他组或刚被管理员修改的配置。
+    # LOAD/SAVE 任何一步失败都不报告成功；最后读取 runtime 验证真正生效的值。
+    if ! result=$(mysql_admin -e "
+        UPDATE mysql_group_replication_hostgroups SET writer_is_also_reader=${desired}
+        WHERE writer_hostgroup=${WRITER} AND reader_hostgroup=${READER}
+          AND backup_writer_hostgroup=${BACKUP_WRITER} AND offline_hostgroup=${OFFLINE}
+          AND active=1 AND writer_is_also_reader=${mode};
+        LOAD MYSQL SERVERS TO RUNTIME; SAVE MYSQL SERVERS TO DISK;
+        SELECT writer_is_also_reader FROM runtime_mysql_group_replication_hostgroups
+        WHERE writer_hostgroup=${WRITER};
+    ") || [ "${result}" != "${desired}" ]; then
+        alert 'GR 路由修改失败或 runtime 校验不一致，请检查管理配置'; return 1
+    fi
+    log "INFO: GR ${WRITER} writer_is_also_reader: ${mode} -> ${desired}"
+    if [ -f "${NOTIFY_LIB}" ]; then
+        . "${NOTIFY_LIB}"
+        SendMessage "${MSG_TYPE}" "GR ${WRITER}: writer_is_also_reader ${mode} -> ${desired}" \
+            || log 'WARN: 路由已修改，但告警发送失败'
+    fi
 }
 
-auto_adjust_mysql_query_rules
+main() {
+    local value cmd lock_rc
+    for value in "${WRITER}" "${READER}" "${BACKUP_WRITER}" "${OFFLINE}" "${QUERY_TIMEOUT}"; do
+        [[ "${value}" =~ ^[0-9]+$ ]] || return 2
+    done
+    (( QUERY_TIMEOUT > 0 )) || return 2
+    for cmd in mysql timeout flock; do command -v "${cmd}" >/dev/null || return 2; done
+    mkdir -p "$(dirname "${LOG_FILE}")" || return 2
+    touch "${LOG_FILE}" || return 2
+    exec 9>"${LOCK_FILE}" || return 2
+    flock -n 9
+    lock_rc=$?
+    # flock=1 表示已有任务持锁；其他错误是环境故障，不能悄悄跳过。
+    if [ "${lock_rc}" -eq 1 ]; then return 0; fi
+    if [ "${lock_rc}" -ne 0 ]; then return 2; fi
+    auto_adjust_mysql_query_rules
+}
+
+main "$@"

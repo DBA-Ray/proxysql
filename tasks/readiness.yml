@@ -1,0 +1,54 @@
+---
+# 端口可连接不代表认证成功，必须进一步执行 SQL。
+# 管理 SQL 和在线 writer 只是基础就绪检查；业务行为仍需在测试环境单独验收。
+- name: Wait for local administrative TCP endpoint
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ admin_login_port }}"
+    timeout: 60
+
+- name: Verify authenticated SQL with bounded retries
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "{{ admin_query_timeout }}"
+      - mysql
+      - --protocol=TCP
+      - --host=127.0.0.1
+      - "--port={{ admin_login_port }}"
+      - "--user={{ proxysql_admin_user }}"
+      - --connect-timeout=5
+      - --execute=SELECT 1
+  environment:
+    MYSQL_PWD: "{{ admin_login_password }}"
+  register: proxysql_sql_ready
+  retries: 5
+  delay: 2
+  until: proxysql_sql_ready.rc == 0
+  changed_when: false
+  no_log: true
+
+# ONLINE 是 ProxySQL 当前监控结果，并非业务验收。至少存在在线 writer 后才允许
+# 升级流程恢复 VIP；实际读写、事务、连接池和复制延迟仍须由业务验收覆盖。
+- name: Wait for at least one online writer backend
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "{{ admin_query_timeout }}"
+      - mysql
+      - --protocol=TCP
+      - --host=127.0.0.1
+      - "--port={{ admin_login_port }}"
+      - "--user={{ proxysql_admin_user }}"
+      - --connect-timeout=5
+      - --batch
+      - --skip-column-names
+      - "--execute=SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id={{ writer_hostgroup | int }} AND status='ONLINE'"
+  environment:
+    MYSQL_PWD: "{{ admin_login_password }}"
+  register: proxysql_backend_ready
+  retries: 15
+  delay: 2
+  until: proxysql_backend_ready.rc == 0 and (proxysql_backend_ready.stdout | trim | int) > 0
+  changed_when: false
+  no_log: true

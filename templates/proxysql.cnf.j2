@@ -31,142 +31,144 @@
 #
 ########################################################################################
 
-#datadir="/var/lib/proxysql"
-#errorlog="/var/lib/proxysql/proxysql.log"
-
 datadir="{{ datadir }}"
-errorlog="{{ datadir }}/proxysql.log"
+errorlog="{{ errorlog }}"
 
 admin_variables=
 {
-{% if admin_web_enabled is defined %}
-        web_enabled = "{{ admin_web_enabled }}"
-        {% endif %}
-mysql_ifaces="{{ admin_mysql_ifaces }}"
-        stats_mysql_query_digest_to_disk=0
-        cluster_username="repl"
-        cluster_mysql_query_rules_diffs_before_sync=1
-        cluster_mysql_servers_diffs_before_sync=1
-        cluster_mysql_users_diffs_before_sync=1
-        cluster_proxysql_servers_diffs_before_sync=1
+    mysql_ifaces="{{ admin_mysql_ifaces }}"
+    stats_mysql_query_digest_to_disk=0
+    cluster_username="{{ mysql_monitor_username }}"
+    cluster_mysql_query_rules_diffs_before_sync=1
+    cluster_mysql_servers_diffs_before_sync=1
+    cluster_mysql_users_diffs_before_sync=1
+    cluster_proxysql_servers_diffs_before_sync=1
+    {% if admin_web_enabled | default(false) | bool %}
+    web_enabled = "true"
+    {% endif %}
 }
 
 mysql_variables=
 {
-        interfaces="{{ mysql_interfaces }}"
-        shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
-        threads={{ mysql_threads }}
-        query_cache_size_MB={{ mysql_query_cache_size_MB }}
-        threshold_resultset_size ={{ mysql_threshold_resultset_size }}
-        monitor_username="{{ mysql_monitor_username }}"
-        monitor_connect_interval={{ mysql_monitor_connect_interval }}
-        monitor_ping_interval={{ mysql_monitor_ping_interval }}
-        monitor_read_only_interval={{ mysql_monitor_read_only_interval }}
-        default_charset="{{ mysql_default_charset }}"
-        max_connections={{ mysql_max_connections }}
-        server_version="{{ mysql_server_version }}"
-        max_allowed_packet={{ mysql_max_allowed_packet }}
-        monitor_groupreplication_healthcheck_timeout="{{ mysql_monitor_groupreplication_healthcheck_timeout }}"
-        wait_timeout={{ mysql_wait_timeout }}
-        log_unhealthy_connections="false"
-        query_digests_lowercase="true"
-        query_digests_normalize_digest_text="true"
-        query_digests_track_hostname="true"
-        default_collation_connection="utf8mb4_0900_ai_ci"
-        eventslog_filesize=268435456
-        eventslog_default_log=0
-        eventslog_format=2
-        eventslog_filename="{{ eventslog_dir }}/events_log"
-        autocommit_false_is_transaction="true"
-#        forward_autocommit="true"
+    interfaces="{{ mysql_interfaces }}"
+    shun_recovery_time_sec={{ mysql_shun_recovery_time_sec }}
+    threads={{ mysql_threads }}
+    query_cache_size_MB={{ mysql_query_cache_size_MB }}
+    threshold_resultset_size ={{ mysql_threshold_resultset_size }}
+    monitor_username="{{ mysql_monitor_username }}"
+    monitor_connect_interval={{ mysql_monitor_connect_interval }}
+    monitor_ping_interval={{ mysql_monitor_ping_interval }}
+    monitor_read_only_interval={{ mysql_monitor_read_only_interval }}
+    default_charset="{{ mysql_default_charset }}"
+    max_connections={{ mysql_max_connections }}
+    server_version="{{ mysql_server_version }}"
+    max_allowed_packet={{ mysql_max_allowed_packet }}
+    monitor_groupreplication_healthcheck_timeout="{{ mysql_monitor_groupreplication_healthcheck_timeout }}"
+    wait_timeout={{ mysql_wait_timeout }}
+    log_unhealthy_connections="false"
+    query_digests_lowercase="true"
+    query_digests_normalize_digest_text="true"
+    query_digests_track_hostname="true"
+    default_collation_connection="utf8mb4_0900_ai_ci"
+    eventslog_filesize=268435456
+    eventslog_default_log=0
+    eventslog_format=2
+    eventslog_filename="{{ eventslog_dir }}/events_log"
+    autocommit_false_is_transaction="true"
 }
-
 
 # defines all the MySQL servers
 mysql_servers =
 (
-{% if groups[mgr_group] is defined %}
-{% for srv in groups[mgr_group] %}
+{% set ns = namespace(first=true) %}
+{% if groups[mysql_group] is defined %}
+{% for srv in groups[mysql_group] %}
+{% if not ns.first %},{% endif %}
+{% set ns.first = false %}
 {
-#  address="{{ hostvars[srv]['inventory_hostname_short'] }}",
-  address="{{ hostvars[srv]['ansible_default_ipv4']['address'] }}",
+  address="{{ hostvars[srv].get('ansible_host', hostvars[srv].get('ansible_ssh_host', hostvars[srv].get('ansible_default_ipv4', {}).get('address', 'MISSING_IP'))) }}",
   port={{ mysql_port }},
   gtid_port={{ gtid_port }},
-  hostgroup={{ reader_hostgroup }},
+  # GR 从 writer 组播种节点，由 ProxySQL 的组复制监控自动分配最终角色。
+  # 传统主从则先加入 reader 组，再由安装任务单独设置 primary_host。
+  hostgroup={{ writer_hostgroup if enable_group_replication | bool else reader_hostgroup }},
   max_connections={{ max_connections }},
   max_replication_lag={{ max_replication_lag }},
-  compression=1   
-}{% if not loop.last %},{% endif %}
+  compression=1,
+  comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
+}
 {% endfor %}
-{% endif %},
+{% endif %}
 {% if groups[slave_group] is defined %}
 {% for srv in groups[slave_group] %}
+{% if not ns.first %},{% endif %}
+{% set ns.first = false %}
 {
-  address="{{ hostvars[srv]['inventory_hostname_short'] }}",
+  address="{{ hostvars[srv].get('ansible_host', hostvars[srv].get('ansible_ssh_host', hostvars[srv].get('ansible_default_ipv4', {}).get('address', 'MISSING_IP'))) }}",
   port={{ mysql_port }},
   gtid_port={{ gtid_port }},
   hostgroup=100,
   max_connections={{ max_connections }},
   max_replication_lag={{ max_replication_lag }},
-  compression=1
-}{% if not loop.last %},{% endif %}
+  compression=1,
+  comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
+}
 {% endfor %}
 {% endif %}
 )
 
 proxysql_servers =
 (
-{% if proxysql_cluster_enabled is defined %}
-{% for srv in groups.all %}
-  {
-    {% if ("proxysql" in srv) %}
-    hostname="{{ hostvars[srv]['inventory_hostname_short'] }}",
-    port=6032,
+{% if proxysql_cluster_enabled | default(false) | bool %}
+{% for srv in groups[proxysql_group] | default([]) %}
+{
+    hostname="{{ hostvars[srv].get('ansible_host', hostvars[srv].get('ansible_ssh_host', hostvars[srv].get('ansible_default_ipv4', {}).get('address', 'MISSING_IP'))) }}",
+    port={{ admin_login_port }},
     weight=0,
     comment="{{ hostvars[srv]['inventory_hostname_short'] }}"
-    {% endif %}
-  }{% if not loop.last %},{% endif %}
+}{% if not loop.last %},{% endif %}
 {% endfor %}
 {% endif %}
 )
 
 # defines all the MySQL users
-mysql_users:
+mysql_users =
 (
-#	{
-#		username = "username" # no default , required
-#		password = "password" # default: ''
-#		default_hostgroup = 0 # default: 0
-#		active = 1            # default: 1
-#	},
-#	{
-#		username = "root"
-#		password = ""
-#		default_hostgroup = 0
-#		max_connections=1000
-#		default_schema="test"
-#		active = 1
-#	},
-#	{ username = "user1" , password = "password" , default_hostgroup = 0 , active = 0 }
+#   {
+#       username = "username" # no default , required
+#       password = "password" # default: ''
+#       default_hostgroup = 0 # default: 0
+#       active = 1            # default: 1
+#   }
 )
 
-
-
-#defines MySQL Query Rules
-mysql_query_rules:
+# defines MySQL Query Rules
+mysql_query_rules =
 (
+{% for primary_user in proxysql_primary_users | default([]) %}
 {
-{%if navicat_query_rule == True %}
+  # 规则按 ID 排序：规则 3 的 apply=0 继续匹配，这里覆盖目标并终止匹配。
+  rule_id={{ primary_user_rule_start | int + loop.index0 }}
+  active=1
+  username="{{ primary_user.username }}_single"
+  destination_hostgroup={{ writer_hostgroup }}
+  cache_ttl=0
+  apply=1
+},
+{% endfor %}
+{% if navicat_query_rule | default(false) | bool %}
+{
   rule_id={{ rule_id }}
   active={{ active }}
   match_digest="{{ match_digest }}"
   multiplex={{ multiplex }}
-  {% endif %}
 },
+{% endif %}
 {
   rule_id=2
   active=1
-  match_digest="^select.*for update$"
+  # 锁定读始终发往 writer，包括 MySQL 8 的 FOR SHARE / NOWAIT / SKIP LOCKED。
+  match_digest="^select.*(for update|for share|lock in share mode)"
   destination_hostgroup={{ writer_hostgroup }}
   apply=1
 },
@@ -195,77 +197,32 @@ mysql_query_rules:
 }
 )
 
-
-scheduler=
+scheduler =
 (
-#  {
-#    id=1
-#    active=0
-#    interval_ms=10000
-#    filename="/var/lib/proxysql/proxysql_galera_checker.sh"
-#    arg1="0"
-#    arg2="0"
-#    arg3="0"
-#    arg4="1"
-#    arg5="/var/lib/proxysql/proxysql_galera_checker.log"
-#  }
 )
 
-
-mysql_replication_hostgroups=
+mysql_replication_hostgroups =
 (
-#        {
-#                writer_hostgroup=30
-#                reader_hostgroup=40
-#                comment="test repl 1"
-#       },
-#       {
-#                writer_hostgroup=50
-#                reader_hostgroup=60
-#                comment="test repl 2"
-#        }
-)
-
-
-mysql_group_replication_hostgroups=
-(
+{% for hg in proxysql_replication_hostgroups | default([]) %}
 {
-{%if proxysql_group_replication_hostgroups is defined %}
-  writer_hostgroup={{ writer_hostgroup }}
-  backup_writer_hostgroup={{ backup_writer_hostgroup }}
-  reader_hostgroup={{ reader_hostgroup }}
-  offline_hostgroup={{ offline_hostgroup }}
-  active={{ group_replication_active }}
-  writer_is_also_reader={{ writer_is_also_reader }}
-  max_transactions_behind={{ max_transactions_behind }}
-{% endif %}
-}
+    writer_hostgroup={{ hg.writer_hostgroup }}
+    reader_hostgroup={{ hg.reader_hostgroup }}
+    comment="{{ hg.comment | default('') }}"
+}{% if not loop.last %},{% endif %}
+{% endfor %}
 )
 
-
-# http://www.hyperrealm.com/libconfig/libconfig_manual.html#Configuration-File-Grammar
-#
-# Below is the BNF grammar for configuration files. Comments and include directives are not part of the grammar, so they are not included here. 
-#
-# configuration = setting-list | empty
-#
-# setting-list = setting | setting-list setting
-#     
-# setting = name (":" | "=") value (";" | "," | empty)
-#     
-# value = scalar-value | array | list | group
-#     
-# value-list = value | value-list "," value
-#     
-# scalar-value = boolean | integer | integer64 | hex | hex64 | float
-#                | string
-#     
-# scalar-value-list = scalar-value | scalar-value-list "," scalar-value
-#     
-# array = "[" (scalar-value-list | empty) "]"
-#     
-# list = "(" (value-list | empty) ")"
-#     
-# group = "{" (setting-list | empty) "}"
-#     
-# empty =
+mysql_group_replication_hostgroups =
+(
+{% for hg in proxysql_group_replication_hostgroups | default([]) %}
+{
+    writer_hostgroup={{ hg.writer_hostgroup }}
+    backup_writer_hostgroup={{ hg.backup_writer_hostgroup }}
+    reader_hostgroup={{ hg.reader_hostgroup }}
+    offline_hostgroup={{ hg.offline_hostgroup }}
+    active={{ hg.active }}
+    writer_is_also_reader={{ hg.writer_is_also_reader }}
+    max_transactions_behind={{ hg.max_transactions_behind }}
+}{% if not loop.last %},{% endif %}
+{% endfor %}
+)
